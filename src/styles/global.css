@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700&family=Source+Serif+4:wght@400;600;700;900&display=swap');
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply font-body text-gray-800 bg-white;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+}
+
+@layer components {
+  /* Navy gradient overlay for hero / dark sections */
+  .navy-overlay {
+    background: linear-gradient(135deg, rgba(30, 58, 110, 0.92) 0%, rgba(15, 31, 58, 0.88) 100%);
+  }
+
+  /* Article card hover animation */
+  .article-card {
+    @apply transition-all duration-300 ease-out;
+  }
+  .article-card:hover {
+    @apply -translate-y-1 shadow-xl;
+  }
+
+  /* Category pill buttons */
+  .category-pill {
+    @apply inline-block px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200;
+  }
+  .category-pill--active {
+    @apply bg-navy-600 text-white;
+  }
+  .category-pill--inactive {
+    @apply bg-gray-100 text-gray-600 hover:bg-gray-200;
+  }
+
+  /* Button styles */
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-6 py-3 bg-white text-navy-700 font-semibold rounded-lg
+           hover:bg-gray-100 transition-colors duration-200;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center px-6 py-3 border-2 border-white text-white font-semibold rounded-lg
+           hover:bg-white hover:text-navy-700 transition-colors duration-200;
+  }
+
+  .btn-navy {
+    @apply inline-flex items-center justify-center px-6 py-3 bg-navy-600 text-white font-semibold rounded-lg
+           hover:bg-navy-700 transition-colors duration-200;
+  }
+
+  /* Form input styling */
+  .form-input {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg
+           focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent
+           placeholder:text-gray-400 text-gray-800;
+  }
+
+  /* Prose / article body styling */
+  .prose-article {
+    @apply text-gray-700 leading-relaxed;
+  }
+  .prose-article h2 {
+    @apply text-2xl font-bold text-gray-900 mt-8 mb-4 font-heading;
+  }
+  .prose-article h3 {
+    @apply text-xl font-bold text-gray-900 mt-6 mb-3 font-heading;
+  }
+  .prose-article p {
+    @apply mb-4;
+  }
+  .prose-article ul, .prose-article ol {
+    @apply mb-4 pl-6;
+  }
+  .prose-article ul {
+    @apply list-disc;
+  }
+  .prose-article ol {
+    @apply list-decimal;
+  }
+  .prose-article li {
+    @apply mb-2;
+  }
+  .prose-article a {
+    @apply text-navy-600 underline hover:text-navy-800;
+  }
+  .prose-article blockquote {
+    @apply border-l-4 border-navy-300 pl-4 italic text-gray-600 my-4;
+  }
+}

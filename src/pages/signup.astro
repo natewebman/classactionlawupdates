@@ -1,0 +1,114 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { siteConfig } from '../site.config';
+---
+
+<BaseLayout title="Sign Up" description="Create a free account to receive personalized class action settlement alerts." noIndex={true}>
+  <section class="bg-gray-50 min-h-[70vh] flex items-center py-16">
+    <div class="max-w-md mx-auto px-4 sm:px-6 w-full">
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-heading font-black text-gray-900">Create Your Account</h1>
+        <p class="text-gray-500 mt-2">Get personalized alerts about class action settlements you qualify for.</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+        <form id="signup-auth-form" class="space-y-5">
+          <div>
+            <label for="auth-name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <input type="text" id="auth-name" name="name" placeholder="John Doe" class="form-input" />
+          </div>
+
+          <div>
+            <label for="auth-email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+            <input type="email" id="auth-email" name="email" placeholder="john@example.com" required class="form-input" />
+          </div>
+
+          <div>
+            <label for="auth-password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input type="password" id="auth-password" name="password" placeholder="At least 8 characters" required minlength="8" class="form-input" />
+          </div>
+
+          <div>
+            <label for="auth-state" class="block text-sm font-medium text-gray-700 mb-1">State</label>
+            <input type="text" id="auth-state" name="state" placeholder="e.g. CA, TX, NY" class="form-input" />
+          </div>
+
+          <div>
+            <p class="text-sm font-medium text-gray-700 mb-2">Topics of Interest</p>
+            <div class="grid grid-cols-2 gap-2">
+              {siteConfig.signupTopics.map((topic) => (
+                <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                  <input type="checkbox" name="topics" value={topic}
+                    class="w-4 h-4 rounded border-gray-300 text-navy-600 focus:ring-navy-500" />
+                  {topic}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <button type="submit" class="w-full btn-navy text-base py-3.5" id="signup-btn">
+            Create Account
+          </button>
+
+          <div id="signup-auth-success" class="hidden text-center py-3 px-4 bg-green-50 text-green-700 rounded-lg text-sm font-medium">
+            Account created! Check your email to confirm.
+          </div>
+          <div id="signup-auth-error" class="hidden text-center py-3 px-4 bg-red-50 text-red-700 rounded-lg text-sm font-medium">
+          </div>
+        </form>
+
+        <p class="text-center text-sm text-gray-500 mt-6">
+          Already have an account?
+          <a href="/login" class="text-navy-600 font-semibold hover:text-navy-800">Log in</a>
+        </p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  import { signUp, addSubscriber } from '../lib/supabase';
+
+  const form = document.getElementById('signup-auth-form') as HTMLFormElement;
+  const successMsg = document.getElementById('signup-auth-success');
+  const errorMsg = document.getElementById('signup-auth-error');
+  const submitBtn = document.getElementById('signup-btn') as HTMLButtonElement;
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    successMsg?.classList.add('hidden');
+    errorMsg?.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating account...';
+
+    const formData = new FormData(form);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+    const name = formData.get('name') as string;
+
+    // Create auth account
+    const { data, error } = await signUp(email, password);
+
+    if (error) {
+      if (errorMsg) {
+        errorMsg.textContent = error.message;
+        errorMsg.classList.remove('hidden');
+      }
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Account';
+      return;
+    }
+
+    // Also add as subscriber
+    await addSubscriber({
+      email,
+      name: name || undefined,
+      source: 'signup_page',
+    });
+
+    form.reset();
+    successMsg?.classList.remove('hidden');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Create Account';
+  });
+</script>

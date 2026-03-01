@@ -1,0 +1,57 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import { getArticles } from '../../lib/supabase';
+import { siteConfig } from '../../site.config';
+
+export function getStaticPaths() {
+  return siteConfig.settlementCategories
+    .filter((c) => c.slug !== 'all')
+    .map((cat) => ({
+      params: { slug: cat.slug },
+      props: { categoryName: cat.name },
+    }));
+}
+
+const { slug } = Astro.params;
+const { categoryName } = Astro.props;
+
+const articles = await getArticles({ category: slug, limit: 50 });
+---
+
+<BaseLayout title={categoryName} description={`Browse ${categoryName} class action lawsuits and settlements.`}>
+  <section class="bg-white py-12 lg:py-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="mb-8">
+        <a href="/settlements" class="inline-flex items-center gap-1 text-navy-600 text-sm font-medium hover:text-navy-800 mb-4">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
+          </svg>
+          All Settlements
+        </a>
+        <h1 class="text-4xl font-heading font-black text-gray-900">{categoryName}</h1>
+        <p class="text-gray-500 mt-2">Browse {categoryName.toLowerCase()} class action lawsuits and settlements.</p>
+      </div>
+
+      {articles.length > 0 ? (
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {articles.map((article) => (
+            <ArticleCard
+              title={article.title}
+              slug={article.slug}
+              category={article.category}
+              metaDescription={article.meta_description}
+              publishedAt={article.published_at}
+              basePath="/settlements"
+            />
+          ))}
+        </div>
+      ) : (
+        <div class="text-center py-16 bg-gray-50 rounded-2xl border border-gray-100">
+          <p class="text-gray-500 font-semibold">No articles in this category yet.</p>
+          <p class="text-gray-400 text-sm mt-1">Check back later for updates.</p>
+        </div>
+      )}
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,189 @@
+---
+import { siteConfig } from '../site.config';
+---
+
+<header class="sticky top-0 z-50 bg-navy-700 shadow-lg">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between h-16 lg:h-18">
+      <!-- Logo -->
+      <a href="/" class="flex items-center gap-3 shrink-0">
+        <svg class="w-9 h-9 text-white" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M20 4L4 12v4l16 8 16-8v-4L20 4z" fill="currentColor" opacity="0.3"/>
+          <path d="M20 8l-12 6v2l12 6 12-6v-2L20 8z" fill="currentColor"/>
+          <rect x="18" y="22" width="4" height="10" rx="1" fill="currentColor"/>
+          <rect x="12" y="32" width="16" height="3" rx="1" fill="currentColor"/>
+          <circle cx="13" cy="14" r="2" fill="currentColor" opacity="0.6"/>
+          <circle cx="27" cy="14" r="2" fill="currentColor" opacity="0.6"/>
+        </svg>
+        <span class="text-white font-heading font-bold text-lg leading-tight hidden sm:block">
+          {siteConfig.shortName}<br/>
+          <span class="text-sm font-normal opacity-80">& Settlements</span>
+        </span>
+      </a>
+
+      <!-- Desktop navigation -->
+      <nav class="hidden lg:flex items-center gap-1">
+        <!-- Lawsuits & Settlements dropdown -->
+        <div class="relative group" data-dropdown>
+          <button
+            class="flex items-center gap-1 px-3 py-2 text-sm font-medium text-white/90 hover:text-white rounded-md hover:bg-white/10 transition-colors"
+            data-dropdown-trigger
+          >
+            Lawsuits & Settlements
+            <svg class="w-4 h-4 transition-transform group-hover:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </button>
+          <div
+            class="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg shadow-xl py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left"
+            data-dropdown-menu
+          >
+            {siteConfig.settlementCategories.map((cat) => (
+              <a
+                href={cat.slug === 'all' ? '/settlements' : `/category/${cat.slug}`}
+                class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-navy-50 hover:text-navy-700 transition-colors"
+              >
+                {cat.name}
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <!-- News & Updates dropdown -->
+        <div class="relative group" data-dropdown>
+          <button
+            class="flex items-center gap-1 px-3 py-2 text-sm font-medium text-white/90 hover:text-white rounded-md hover:bg-white/10 transition-colors"
+            data-dropdown-trigger
+          >
+            News & Updates
+            <svg class="w-4 h-4 transition-transform group-hover:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </button>
+          <div
+            class="absolute left-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left"
+            data-dropdown-menu
+          >
+            {siteConfig.newsCategories.map((cat) => (
+              <a
+                href={cat.slug === 'all' ? '/news' : `/news?type=${cat.slug}`}
+                class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-navy-50 hover:text-navy-700 transition-colors"
+              >
+                {cat.name}
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <!-- Static links -->
+        <a href="/login" class="px-3 py-2 text-sm font-medium text-white/90 hover:text-white rounded-md hover:bg-white/10 transition-colors">
+          Members Login
+        </a>
+        <a href="/attorney-portal" class="px-3 py-2 text-sm font-medium text-white/90 hover:text-white rounded-md hover:bg-white/10 transition-colors">
+          Attorney Portal
+        </a>
+        <a
+          href="/signup"
+          class="ml-2 px-5 py-2 text-sm font-semibold bg-white text-navy-700 rounded-lg hover:bg-gray-100 transition-colors"
+        >
+          Sign Up
+        </a>
+      </nav>
+
+      <!-- Mobile hamburger -->
+      <button
+        class="lg:hidden p-2 text-white rounded-md hover:bg-white/10"
+        id="mobile-menu-toggle"
+        aria-label="Toggle menu"
+      >
+        <svg class="w-6 h-6" id="hamburger-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+        <svg class="w-6 h-6 hidden" id="close-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile menu -->
+  <div class="lg:hidden hidden bg-navy-800 border-t border-white/10" id="mobile-menu">
+    <div class="px-4 py-4 space-y-1">
+      <!-- Settlements accordion -->
+      <div>
+        <button class="w-full flex items-center justify-between px-3 py-2.5 text-white/90 text-sm font-medium rounded-md hover:bg-white/10" data-mobile-accordion>
+          Lawsuits & Settlements
+          <svg class="w-4 h-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div class="hidden pl-4 space-y-1 mt-1" data-mobile-submenu>
+          {siteConfig.settlementCategories.map((cat) => (
+            <a
+              href={cat.slug === 'all' ? '/settlements' : `/category/${cat.slug}`}
+              class="block px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-md"
+            >
+              {cat.name}
+            </a>
+          ))}
+        </div>
+      </div>
+
+      <!-- News accordion -->
+      <div>
+        <button class="w-full flex items-center justify-between px-3 py-2.5 text-white/90 text-sm font-medium rounded-md hover:bg-white/10" data-mobile-accordion>
+          News & Updates
+          <svg class="w-4 h-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div class="hidden pl-4 space-y-1 mt-1" data-mobile-submenu>
+          {siteConfig.newsCategories.map((cat) => (
+            <a
+              href={cat.slug === 'all' ? '/news' : `/news?type=${cat.slug}`}
+              class="block px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-md"
+            >
+              {cat.name}
+            </a>
+          ))}
+        </div>
+      </div>
+
+      <a href="/login" class="block px-3 py-2.5 text-sm font-medium text-white/90 hover:text-white rounded-md hover:bg-white/10">
+        Members Login
+      </a>
+      <a href="/attorney-portal" class="block px-3 py-2.5 text-sm font-medium text-white/90 hover:text-white rounded-md hover:bg-white/10">
+        Attorney Portal
+      </a>
+      <div class="pt-2">
+        <a href="/signup" class="block w-full text-center px-5 py-2.5 text-sm font-semibold bg-white text-navy-700 rounded-lg hover:bg-gray-100">
+          Sign Up
+        </a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<script>
+  // Mobile menu toggle
+  const toggle = document.getElementById('mobile-menu-toggle');
+  const menu = document.getElementById('mobile-menu');
+  const hamburger = document.getElementById('hamburger-icon');
+  const closeIcon = document.getElementById('close-icon');
+
+  toggle?.addEventListener('click', () => {
+    menu?.classList.toggle('hidden');
+    hamburger?.classList.toggle('hidden');
+    closeIcon?.classList.toggle('hidden');
+  });
+
+  // Mobile accordion submenus
+  document.querySelectorAll('[data-mobile-accordion]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const submenu = btn.nextElementSibling;
+      const arrow = btn.querySelector('svg');
+      submenu?.classList.toggle('hidden');
+      arrow?.classList.toggle('rotate-180');
+    });
+  });
+</script>

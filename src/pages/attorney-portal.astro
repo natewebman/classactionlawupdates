@@ -1,0 +1,138 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { siteConfig } from '../site.config';
+---
+
+<BaseLayout title="Attorney Portal" description="For attorneys: partner with Class Action News & Settlements to reach potential claimants.">
+  <section class="bg-white py-12 lg:py-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="text-center mb-12">
+        <h1 class="text-4xl lg:text-5xl font-heading font-black text-gray-900">Attorney Portal</h1>
+        <p class="text-gray-500 mt-3 text-lg max-w-2xl mx-auto">
+          Partner with {siteConfig.shortName} to connect with potential claimants for your class action cases.
+        </p>
+      </div>
+
+      <!-- Benefits grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+        <div class="text-center p-6">
+          <div class="w-14 h-14 bg-navy-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <svg class="w-7 h-7 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </div>
+          <h3 class="font-heading font-bold text-lg text-gray-900 mb-2">Reach Claimants</h3>
+          <p class="text-gray-500 text-sm">Connect with thousands of potential claimants who visit our site daily seeking settlement information.</p>
+        </div>
+
+        <div class="text-center p-6">
+          <div class="w-14 h-14 bg-navy-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <svg class="w-7 h-7 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+          </div>
+          <h3 class="font-heading font-bold text-lg text-gray-900 mb-2">Case Promotion</h3>
+          <p class="text-gray-500 text-sm">Feature your active cases and investigations prominently to drive qualified leads to your practice.</p>
+        </div>
+
+        <div class="text-center p-6">
+          <div class="w-14 h-14 bg-navy-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <svg class="w-7 h-7 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <h3 class="font-heading font-bold text-lg text-gray-900 mb-2">Direct Contact</h3>
+          <p class="text-gray-500 text-sm">Receive qualified leads directly to your inbox with full contact information and case interest details.</p>
+        </div>
+      </div>
+
+      <!-- Contact form for attorneys -->
+      <div class="bg-gray-50 rounded-2xl p-6 sm:p-10 max-w-2xl mx-auto">
+        <h2 class="text-2xl font-heading font-bold text-gray-900 text-center mb-6">Get Started</h2>
+        <p class="text-gray-500 text-center mb-8">Fill out the form below and our team will reach out to discuss partnership opportunities.</p>
+
+        <form id="attorney-form" class="space-y-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="atty-name" class="block text-sm font-medium text-gray-700 mb-1">Attorney Name</label>
+              <input type="text" id="atty-name" name="name" required placeholder="Jane Smith" class="form-input" />
+            </div>
+            <div>
+              <label for="atty-firm" class="block text-sm font-medium text-gray-700 mb-1">Law Firm</label>
+              <input type="text" id="atty-firm" name="firm" required placeholder="Smith & Associates" class="form-input" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="atty-email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" id="atty-email" name="email" required placeholder="jane@lawfirm.com" class="form-input" />
+            </div>
+            <div>
+              <label for="atty-phone" class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input type="tel" id="atty-phone" name="phone" placeholder="(555) 123-4567" class="form-input" />
+            </div>
+          </div>
+
+          <div>
+            <label for="atty-message" class="block text-sm font-medium text-gray-700 mb-1">Tell us about your cases</label>
+            <textarea id="atty-message" name="message" rows="4" placeholder="Describe the class action cases you're currently working on..." class="form-input"></textarea>
+          </div>
+
+          <button type="submit" class="w-full btn-navy text-base py-3.5" id="atty-submit-btn">
+            Submit Inquiry
+          </button>
+
+          <div id="atty-success" class="hidden text-center py-3 px-4 bg-green-50 text-green-700 rounded-lg text-sm font-medium">
+            Thank you! We'll be in touch within 1-2 business days.
+          </div>
+          <div id="atty-error" class="hidden text-center py-3 px-4 bg-red-50 text-red-700 rounded-lg text-sm font-medium">
+            Something went wrong. Please try again.
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  import { addSubmission } from '../lib/supabase';
+
+  const form = document.getElementById('attorney-form') as HTMLFormElement;
+  const successMsg = document.getElementById('atty-success');
+  const errorMsg = document.getElementById('atty-error');
+  const submitBtn = document.getElementById('atty-submit-btn') as HTMLButtonElement;
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    successMsg?.classList.add('hidden');
+    errorMsg?.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+
+    const formData = new FormData(form);
+
+    const result = await addSubmission({
+      form_name: 'attorney_inquiry',
+      data: {
+        name: formData.get('name'),
+        firm: formData.get('firm'),
+        email: formData.get('email'),
+        phone: formData.get('phone'),
+        message: formData.get('message'),
+      },
+      landing_page: window.location.pathname,
+      referrer: document.referrer || undefined,
+    });
+
+    if (result.success) {
+      form.reset();
+      successMsg?.classList.remove('hidden');
+    } else {
+      errorMsg?.classList.remove('hidden');
+    }
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit Inquiry';
+  });
+</script>

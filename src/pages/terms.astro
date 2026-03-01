@@ -1,0 +1,42 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { siteConfig } from '../site.config';
+---
+
+<BaseLayout title="Terms of Service" description="Terms of service for Class Action News & Settlements.">
+  <section class="bg-white py-12 lg:py-16">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h1 class="text-4xl font-heading font-black text-gray-900 mb-2">Terms of Service</h1>
+      <p class="text-gray-400 text-sm mb-8">Last updated: February 2026</p>
+
+      <div class="prose-article">
+        <h2>Acceptance of Terms</h2>
+        <p>By accessing and using {siteConfig.name} ("the Site"), you accept and agree to be bound by these Terms of Service. If you do not agree, please do not use the Site.</p>
+
+        <h2>Nature of Content</h2>
+        <p>The content on this Site is provided for general informational purposes only. We aggregate news and information about class action lawsuits and settlements from publicly available sources. This Site does not provide legal advice, and no attorney-client relationship is created by your use of this Site.</p>
+
+        <h2>No Legal Advice</h2>
+        <p>Nothing on this Site should be construed as legal advice. If you believe you may have a legal claim, you should consult with a qualified attorney licensed in your jurisdiction. We are not a law firm and do not provide legal services.</p>
+
+        <h2>Accuracy of Information</h2>
+        <p>While we strive to provide accurate and up-to-date information, we make no warranties or representations about the accuracy, completeness, or timeliness of the content on this Site. Settlement deadlines, eligibility requirements, and case details may change without notice.</p>
+
+        <h2>User Accounts</h2>
+        <p>If you create an account, you are responsible for maintaining the security of your login credentials. You agree to provide accurate information and to notify us immediately of any unauthorized use of your account.</p>
+
+        <h2>Intellectual Property</h2>
+        <p>The original content, design, and compilation of this Site are owned by {siteConfig.name} and are protected by copyright and other intellectual property laws. You may not reproduce, distribute, or create derivative works from our content without prior written permission.</p>
+
+        <h2>Limitation of Liability</h2>
+        <p>To the fullest extent permitted by law, {siteConfig.name} shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Site, including but not limited to missed settlement deadlines or reliance on information provided.</p>
+
+        <h2>Changes to Terms</h2>
+        <p>We reserve the right to update these Terms of Service at any time. Continued use of the Site following changes constitutes acceptance of the revised terms.</p>
+
+        <h2>Contact</h2>
+        <p>{siteConfig.name}<br />{siteConfig.contact.address}<br />{siteConfig.contact.city}, {siteConfig.contact.state} {siteConfig.contact.zip}</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

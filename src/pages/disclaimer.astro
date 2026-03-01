@@ -1,0 +1,33 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { siteConfig } from '../site.config';
+---
+
+<BaseLayout title="Disclaimer" description="Legal disclaimer for Class Action News & Settlements.">
+  <section class="bg-white py-12 lg:py-16">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h1 class="text-4xl font-heading font-black text-gray-900 mb-2">Disclaimer</h1>
+      <p class="text-gray-400 text-sm mb-8">Last updated: February 2026</p>
+
+      <div class="prose-article">
+        <h2>General Disclaimer</h2>
+        <p>{siteConfig.name} is a news and information aggregation website. We are not a law firm, do not provide legal advice, and do not represent any party in legal proceedings. No attorney-client relationship is formed by visiting this Site or using our services.</p>
+
+        <h2>Not Legal Advice</h2>
+        <p>The information provided on this Site, including articles about lawsuits, settlements, and legal developments, is for general informational purposes only. It should not be relied upon as a substitute for professional legal counsel. Always consult a qualified attorney about your specific legal situation.</p>
+
+        <h2>Settlement Information</h2>
+        <p>Settlement details, deadlines, eligibility criteria, and payment amounts are reported as accurately as possible based on publicly available information. However, these details are subject to change and may not reflect the most current status of a case. Always verify settlement information with the official settlement administrator or court documents.</p>
+
+        <h2>Third-Party Links</h2>
+        <p>This Site may contain links to third-party websites, including law firm websites, court documents, and settlement claim forms. We are not responsible for the content, accuracy, or privacy practices of third-party sites.</p>
+
+        <h2>No Guarantee of Results</h2>
+        <p>Any information about potential settlements or lawsuit outcomes does not guarantee that you will receive compensation. Eligibility and payment amounts vary by case and individual circumstances.</p>
+
+        <h2>Contact</h2>
+        <p>If you have questions about this disclaimer, please contact us at:<br />{siteConfig.name}<br />{siteConfig.contact.address}<br />{siteConfig.contact.city}, {siteConfig.contact.state} {siteConfig.contact.zip}</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

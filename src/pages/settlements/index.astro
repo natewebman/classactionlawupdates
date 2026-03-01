@@ -1,0 +1,90 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import { getArticles } from '../../lib/supabase';
+import { siteConfig } from '../../site.config';
+
+// Fetch all settlement-type articles
+const allSettlements = await getArticles({ limit: 50 });
+---
+
+<BaseLayout title="Lawsuits & Settlements" description="Browse current class action lawsuits and open settlements. Find out if you qualify to claim money.">
+  <section class="bg-white py-12 lg:py-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Page header -->
+      <div class="text-center mb-10">
+        <h1 class="text-4xl lg:text-5xl font-heading font-black text-gray-900">Lawsuits & Settlements</h1>
+        <p class="text-gray-500 mt-3 text-lg">Browse current class action lawsuits and find out if you qualify.</p>
+      </div>
+
+      <!-- Category filter tabs -->
+      <div class="flex flex-wrap justify-center gap-2 mb-10" id="settlement-tabs">
+        {siteConfig.settlementCategories.map((cat) => (
+          <button
+            class:list={[
+              'category-pill',
+              cat.slug === 'all' ? 'category-pill--active' : 'category-pill--inactive',
+            ]}
+            data-filter={cat.slug}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
+
+      <!-- Settlements grid -->
+      {allSettlements.length > 0 ? (
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="settlements-grid">
+          {allSettlements.map((article) => (
+            <div data-category={article.category ?? 'all'}>
+              <ArticleCard
+                title={article.title}
+                slug={article.slug}
+                category={article.category}
+                metaDescription={article.meta_description}
+                publishedAt={article.published_at}
+                basePath="/settlements"
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div class="text-center py-16 bg-gray-50 rounded-2xl border border-gray-100">
+          <svg class="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <p class="text-gray-500 font-semibold text-lg">No settlements published yet</p>
+          <p class="text-gray-400 mt-1">Check back soon for updates.</p>
+        </div>
+      )}
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  const tabs = document.querySelectorAll('#settlement-tabs button');
+  const items = document.querySelectorAll('#settlements-grid > div');
+
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const filter = (tab as HTMLElement).dataset.filter;
+
+      tabs.forEach((t) => {
+        t.classList.remove('category-pill--active');
+        t.classList.add('category-pill--inactive');
+      });
+      tab.classList.remove('category-pill--inactive');
+      tab.classList.add('category-pill--active');
+
+      items.forEach((item) => {
+        const cat = (item as HTMLElement).dataset.category;
+        if (filter === 'all' || cat === filter) {
+          (item as HTMLElement).style.display = '';
+        } else {
+          (item as HTMLElement).style.display = 'none';
+        }
+      });
+    });
+  });
+</script>

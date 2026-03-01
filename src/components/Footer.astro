@@ -1,0 +1,85 @@
+---
+import { siteConfig } from '../site.config';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="bg-navy-800 text-white">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
+      <!-- Brand column -->
+      <div>
+        <div class="flex items-center gap-3 mb-4">
+          <svg class="w-8 h-8 text-white" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 4L4 12v4l16 8 16-8v-4L20 4z" fill="currentColor" opacity="0.3"/>
+            <path d="M20 8l-12 6v2l12 6 12-6v-2L20 8z" fill="currentColor"/>
+            <rect x="18" y="22" width="4" height="10" rx="1" fill="currentColor"/>
+            <rect x="12" y="32" width="16" height="3" rx="1" fill="currentColor"/>
+          </svg>
+          <span class="font-heading font-bold text-lg">{siteConfig.shortName}</span>
+        </div>
+        <p class="text-white/60 text-sm leading-relaxed">
+          Your trusted source for the latest class action lawsuits, settlements, and legal news.
+          Stay informed and claim what you're owed.
+        </p>
+      </div>
+
+      <!-- Quick Links -->
+      <div>
+        <h3 class="font-heading font-bold text-lg mb-4">Quick Links</h3>
+        <ul class="space-y-2.5">
+          {siteConfig.quickLinks.map((link) => (
+            <li>
+              <a href={link.href} class="text-sm text-white/60 hover:text-white transition-colors">
+                {link.name}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <!-- Categories -->
+      <div>
+        <h3 class="font-heading font-bold text-lg mb-4">Categories</h3>
+        <ul class="space-y-2.5">
+          {siteConfig.settlementCategories.filter(c => c.slug !== 'all').map((cat) => (
+            <li>
+              <a href={`/category/${cat.slug}`} class="text-sm text-white/60 hover:text-white transition-colors">
+                {cat.name}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <!-- Contact -->
+      <div>
+        <h3 class="font-heading font-bold text-lg mb-4">Contact Us</h3>
+        <div class="flex items-start gap-2 text-sm text-white/60">
+          <svg class="w-5 h-5 text-white/40 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span>
+            {siteConfig.contact.address}<br/>
+            {siteConfig.contact.city}, {siteConfig.contact.state} {siteConfig.contact.zip}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="border-t border-white/10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <p class="text-sm text-white/50">
+        &copy; {year} {siteConfig.name}. All rights reserved.
+      </p>
+      <div class="flex items-center gap-6">
+        <a href="/privacy-policy" class="text-sm text-white/50 hover:text-white transition-colors">Privacy Policy</a>
+        <a href="/terms" class="text-sm text-white/50 hover:text-white transition-colors">Terms of Service</a>
+        <a href="/disclaimer" class="text-sm text-white/50 hover:text-white transition-colors">Disclaimer</a>
+      </div>
+    </div>
+  </div>
+</footer>

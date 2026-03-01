@@ -1,0 +1,135 @@
+---
+import { siteConfig } from '../site.config';
+
+interface Props {
+  /** Show the full "Stay Updated. Get Paid." section header */
+  showHeader?: boolean;
+}
+
+const { showHeader = true } = Astro.props;
+---
+
+<section class="bg-navy-800 text-white">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-20">
+    {showHeader && (
+      <div class="max-w-2xl mb-10">
+        <h2 class="text-3xl sm:text-4xl font-heading font-black mb-4">
+          Stay Updated. Get Paid.
+        </h2>
+        <p class="text-lg text-white/70 leading-relaxed">
+          Join thousands of members who receive personalized alerts about new class action settlements
+          they qualify for. Never miss a deadline again.
+        </p>
+        <ul class="mt-6 space-y-3">
+          <li class="flex items-center gap-3">
+            <svg class="w-6 h-6 text-accent-light shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="text-white/80">Customized alerts based on your interests</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <svg class="w-6 h-6 text-accent-light shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="text-white/80">Weekly digest of major case filings</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <svg class="w-6 h-6 text-accent-light shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="text-white/80">100% free forever</span>
+          </li>
+        </ul>
+      </div>
+    )}
+
+    <!-- Form -->
+    <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-3xl shadow-xl">
+      <h3 class="text-xl font-heading font-bold text-gray-900 text-center mb-6">Sign Up for Alerts</h3>
+
+      <form id="signup-form" class="space-y-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label for="signup-name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <input type="text" id="signup-name" name="name" placeholder="John Doe" class="form-input" />
+          </div>
+          <div>
+            <label for="signup-state" class="block text-sm font-medium text-gray-700 mb-1">State</label>
+            <input type="text" id="signup-state" name="state" placeholder="e.g. CA, NY" class="form-input" />
+          </div>
+        </div>
+
+        <div>
+          <label for="signup-email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+          <input type="email" id="signup-email" name="email" placeholder="john@example.com" required class="form-input" />
+        </div>
+
+        <div>
+          <p class="text-sm font-medium text-gray-700 mb-2">Topics of Interest</p>
+          <div class="grid grid-cols-2 gap-2">
+            {siteConfig.signupTopics.map((topic) => (
+              <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                <input type="checkbox" name="topics" value={topic}
+                  class="w-4 h-4 rounded border-gray-300 text-navy-600 focus:ring-navy-500" />
+                {topic}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          class="w-full btn-navy text-base py-3.5"
+        >
+          Subscribe Now
+        </button>
+
+        <!-- Success / error messages -->
+        <div id="signup-success" class="hidden text-center py-3 px-4 bg-green-50 text-green-700 rounded-lg text-sm font-medium">
+          You're signed up! Check your email for confirmation.
+        </div>
+        <div id="signup-error" class="hidden text-center py-3 px-4 bg-red-50 text-red-700 rounded-lg text-sm font-medium">
+          Something went wrong. Please try again.
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { addSubscriber } from '../lib/supabase';
+
+  const form = document.getElementById('signup-form') as HTMLFormElement;
+  const successMsg = document.getElementById('signup-success');
+  const errorMsg = document.getElementById('signup-error');
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    successMsg?.classList.add('hidden');
+    errorMsg?.classList.add('hidden');
+
+    const formData = new FormData(form);
+    const email = formData.get('email') as string;
+    const name = formData.get('name') as string;
+
+    if (!email) return;
+
+    // Get UTM params from URL
+    const params = new URLSearchParams(window.location.search);
+
+    const result = await addSubscriber({
+      email,
+      name: name || undefined,
+      source: 'homepage_form',
+      utm_source: params.get('utm_source') ?? undefined,
+      utm_campaign: params.get('utm_campaign') ?? undefined,
+    });
+
+    if (result.success) {
+      form.reset();
+      successMsg?.classList.remove('hidden');
+    } else {
+      errorMsg?.classList.remove('hidden');
+    }
+  });
+</script>

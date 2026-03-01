@@ -1,0 +1,88 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import { getArticles } from '../../lib/supabase';
+import { siteConfig } from '../../site.config';
+
+// At build time, fetch all published news articles
+const allNews = await getArticles({ limit: 50 });
+---
+
+<BaseLayout title="News & Updates" description="Stay informed with the latest case filings and settlement news.">
+  <section class="bg-white py-12 lg:py-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Page header -->
+      <div class="text-center mb-10">
+        <h1 class="text-4xl lg:text-5xl font-heading font-black text-gray-900">News & Updates</h1>
+        <p class="text-gray-500 mt-3 text-lg">Stay informed with the latest case filings and settlement news.</p>
+      </div>
+
+      <!-- Category tabs (client-side filtering) -->
+      <div class="flex flex-wrap justify-center gap-2 mb-10" id="news-tabs">
+        {siteConfig.newsCategories.map((cat) => (
+          <button
+            class:list={[
+              'category-pill',
+              cat.slug === 'all' ? 'category-pill--active' : 'category-pill--inactive',
+            ]}
+            data-filter={cat.slug}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
+
+      <!-- Articles grid -->
+      {allNews.length > 0 ? (
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="news-grid">
+          {allNews.map((article) => (
+            <div data-news-type={article.news_type ?? 'all'}>
+              <ArticleCard
+                title={article.title}
+                slug={article.slug}
+                newsType={article.news_type}
+                metaDescription={article.meta_description}
+                publishedAt={article.published_at}
+                basePath="/news"
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div class="text-center py-16 bg-gray-50 rounded-2xl border border-gray-100" id="news-empty">
+          <p class="text-gray-500 font-semibold text-lg">No articles found</p>
+          <p class="text-gray-400 mt-1">Check back later for updates in this category.</p>
+        </div>
+      )}
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  const tabs = document.querySelectorAll('#news-tabs button');
+  const items = document.querySelectorAll('#news-grid > div');
+
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const filter = (tab as HTMLElement).dataset.filter;
+
+      // Update active tab
+      tabs.forEach((t) => {
+        t.classList.remove('category-pill--active');
+        t.classList.add('category-pill--inactive');
+      });
+      tab.classList.remove('category-pill--inactive');
+      tab.classList.add('category-pill--active');
+
+      // Filter articles
+      items.forEach((item) => {
+        const type = (item as HTMLElement).dataset.newsType;
+        if (filter === 'all' || type === filter) {
+          (item as HTMLElement).style.display = '';
+        } else {
+          (item as HTMLElement).style.display = 'none';
+        }
+      });
+    });
+  });
+</script>

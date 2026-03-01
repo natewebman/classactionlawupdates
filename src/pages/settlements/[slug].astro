@@ -1,0 +1,69 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getArticleBySlug, getAllArticleSlugs } from '../../lib/supabase';
+
+export async function getStaticPaths() {
+  const slugs = await getAllArticleSlugs();
+  return slugs.map((slug) => ({ params: { slug } }));
+}
+
+const { slug } = Astro.params;
+const article = await getArticleBySlug(slug!);
+
+if (!article) {
+  return Astro.redirect('/settlements');
+}
+
+const publishDate = article.published_at
+  ? new Date(article.published_at).toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    })
+  : null;
+
+const displayCategory = article.category ?? 'Settlement';
+---
+
+<BaseLayout title={article.title} description={article.meta_description ?? ''}>
+  <article class="bg-white">
+    <!-- Article header -->
+    <div class="bg-gradient-to-br from-navy-700 to-navy-900 py-12 lg:py-16">
+      <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
+            {displayCategory}
+          </span>
+          {publishDate && (
+            <time class="text-sm text-white/60">{publishDate}</time>
+          )}
+        </div>
+        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-heading font-black text-white leading-tight">
+          {article.title}
+        </h1>
+        {article.meta_description && (
+          <p class="text-lg text-white/70 mt-4 leading-relaxed">{article.meta_description}</p>
+        )}
+      </div>
+    </div>
+
+    <!-- Article body -->
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+      {article.content ? (
+        <div class="prose-article text-lg" set:html={article.content} />
+      ) : (
+        <p class="text-gray-400 italic">Article content is being prepared. Check back soon.</p>
+      )}
+
+      <!-- Back -->
+      <div class="mt-12 pt-8 border-t border-gray-200">
+        <a href="/settlements" class="inline-flex items-center gap-2 text-navy-600 font-semibold hover:text-navy-800">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
+          </svg>
+          Back to Settlements
+        </a>
+      </div>
+    </div>
+  </article>
+</BaseLayout>
