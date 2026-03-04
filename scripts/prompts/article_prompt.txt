@@ -1,0 +1,14 @@
+Write an original, informative article about a recent or ongoing class action lawsuit in the "{{category}}" category.
+
+This is article {{article_number}} of {{total_articles}} in this generation run. Make sure the topic is distinct from common recent headlines — find an angle or case that readers may not have seen yet.
+
+Requirements:
+- The article should be timely and feel current (reference recent developments, filings, or settlements)
+- Include specific details: court names, company names, settlement amounts, filing dates where relevant
+- Explain what the lawsuit alleges and why it matters to everyday consumers
+- Include a section on what affected consumers should do (without giving legal advice)
+- Content must be at least 800 words
+- Use proper HTML formatting in the content field
+- Make the title compelling and SEO-friendly
+
+Respond with ONLY the JSON object as specified in your instructions.
