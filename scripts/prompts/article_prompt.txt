@@ -1,14 +1,20 @@
-Write an original, informative article about a recent or ongoing class action lawsuit in the "{{category}}" category.
+STEP 1: Search for recent class action lawsuits in the "{{category}}" category.
+- Search for terms like "{{category}} class action lawsuit 2025" or "{{category}} class action settlement 2025"
+- Look for cases with recent activity (filings, settlements, rulings)
 
-This is article {{article_number}} of {{total_articles}} in this generation run. Make sure the topic is distinct from common recent headlines — find an angle or case that readers may not have seen yet.
+STEP 2: Pick ONE specific lawsuit from your search results.
+- Choose a case that has concrete details available (court name, parties, dates, amounts)
+- This is article {{article_number}} of {{total_articles}} — pick a case that readers may not have seen widely covered
 
-Requirements:
-- The article should be timely and feel current (reference recent developments, filings, or settlements)
-- Include specific details: court names, company names, settlement amounts, filing dates where relevant
+STEP 3: Write the article about ONLY that one lawsuit.
+- Every detail in your article must come from your search results
+- The title must match the content — both about the same case
+- Include specific details: court names, company names, settlement amounts, filing dates
 - Explain what the lawsuit alleges and why it matters to everyday consumers
 - Include a section on what affected consumers should do (without giving legal advice)
 - Content must be at least 800 words
 - Use proper HTML formatting in the content field
-- Make the title compelling and SEO-friendly
+
+CRITICAL: Do not mix details from different lawsuits. One case per article.
 
 Respond with ONLY the JSON object as specified in your instructions.
