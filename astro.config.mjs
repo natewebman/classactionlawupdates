@@ -4,5 +4,5 @@ import tailwind from '@astrojs/tailwind';
 export default defineConfig({
   site: 'https://classactionlawupdates.com',
   integrations: [tailwind()],
-  output: 'static',
+  output: 'hybrid',
 });
