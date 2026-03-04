@@ -1,0 +1,52 @@
+name: Generate Content
+on:
+  workflow_dispatch:
+    inputs:
+      articles_count:
+        description: 'Number of articles to generate'
+        default: '3'
+      model:
+        description: 'Claude model to use'
+        default: 'claude-haiku-4-5-20251001'
+      generation_mode:
+        description: 'batch (50% off) or standard (real-time)'
+        default: 'standard'
+      categories:
+        description: 'Comma-separated categories (empty = random)'
+        default: ''
+      admin_run_id:
+        description: 'UUID from admin DB generation_runs'
+        default: ''
+      prompt_version:
+        description: 'Prompt version label'
+        default: 'v1'
+  schedule:
+    - cron: '0 12 * * *'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install anthropic supabase psycopg2-binary
+
+      - name: Generate Content
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          ADMIN_DB_CONNECTION: ${{ secrets.ADMIN_DB_CONNECTION }}
+          ARTICLES_COUNT: ${{ inputs.articles_count || '3' }}
+          MODEL: ${{ inputs.model || 'claude-haiku-4-5-20251001' }}
+          GENERATION_MODE: ${{ inputs.generation_mode || 'standard' }}
+          CATEGORIES: ${{ inputs.categories || '' }}
+          ADMIN_RUN_ID: ${{ inputs.admin_run_id || '' }}
+          PROMPT_VERSION: ${{ inputs.prompt_version || 'v1' }}
+        run: python scripts/generate_content.py
