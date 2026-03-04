@@ -196,7 +196,7 @@ def generate_article(client: anthropic.Anthropic, system_prompt: str, article_pr
 # DATABASE WRITES
 # =============================================================================
 
-def write_site_article(supabase_client, article_id: str, article_data: dict, category: str):
+def write_site_article(supabase_client, article_id: str, article_data: dict, category: str, site_id: str):
     """Write article to the SITE Supabase articles table."""
     # Always build slug ourselves with UUID suffix for uniqueness
     base_slug = article_data.get("slug") or slugify(article_data.get("title", "untitled"))
@@ -204,6 +204,7 @@ def write_site_article(supabase_client, article_id: str, article_data: dict, cat
 
     row = {
         "id": article_id,
+        "site_id": site_id,
         "title": article_data.get("title", "Untitled"),
         "slug": unique_slug,
         "content": article_data.get("content", ""),
@@ -373,6 +374,16 @@ def main():
     if admin_conn and ADMIN_RUN_ID and not site_id:
         print("WARNING: Could not resolve site_id. Admin writes will be skipped for run_articles.")
 
+    # ── Resolve site_id from SITE DB if not available from admin ──
+    site_db_site_id = None
+    try:
+        sites_result = site_db.table("sites").select("id").limit(1).execute()
+        if sites_result.data and len(sites_result.data) > 0:
+            site_db_site_id = sites_result.data[0]["id"]
+            print(f"Site DB site_id: {site_db_site_id}")
+    except Exception as e:
+        print(f"WARNING: Could not look up site_id from site DB: {e}")
+
     # ── Pick categories ───────────────────────────────────────────
     categories = pick_categories(ARTICLES_COUNT)
 
@@ -419,7 +430,7 @@ def main():
             print(f"  Tokens: {input_tokens} in / {output_tokens} out")
 
             # ── Write to SITE DB ──────────────────────────────────
-            write_site_article(site_db, article_id, article_data, category)
+            write_site_article(site_db, article_id, article_data, category, site_db_site_id)
             print(f"  ✓ Site DB: written")
             articles_generated += 1
             articles_published += 1
