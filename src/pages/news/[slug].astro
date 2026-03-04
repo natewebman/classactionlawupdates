@@ -2,7 +2,9 @@
 export const prerender = false;
 
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import RelatedArticles from '../../components/RelatedArticles.astro';
 import { getArticleBySlug } from '../../lib/supabase';
+import { siteConfig } from '../../site.config';
 
 const { slug } = Astro.params;
 const article = await getArticleBySlug(slug!);
@@ -19,69 +21,73 @@ const publishDate = article.published_at
     })
   : null;
 
-const displayCategory = article.category ?? article.news_type ?? 'General';
+const displayCategory = article.category ?? article.news_type ?? 'News';
+const heroImage = (article as any).hero_image ?? null;
+
+// SEO structured data
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": article.title,
+  "description": article.meta_description,
+  "datePublished": article.published_at,
+  "dateModified": article.updated_at,
+  "publisher": {
+    "@type": "Organization",
+    "name": siteConfig.name,
+    "url": `https://${siteConfig.domain}`
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": `https://${siteConfig.domain}/news/${slug}`
+  }
+};
 ---
 
 <BaseLayout title={article.title} description={article.meta_description ?? ''}>
-  <article class="bg-white">
-    <!-- Article header -->
-    <div class="bg-gradient-to-br from-navy-700 to-navy-900 py-12 lg:py-16">
-      <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center gap-3 mb-4">
+  <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+
+  <article class="bg-gray-50 min-h-screen">
+    <!-- Hero Header -->
+    <header class="bg-gradient-to-br from-navy-700 via-navy-800 to-navy-900 relative overflow-hidden">
+      <div class="absolute inset-0 opacity-10">
+        <div class="absolute inset-0" style="background-image: url('data:image/svg+xml,%3Csvg width=&quot;60&quot; height=&quot;60&quot; viewBox=&quot;0 0 60 60&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;%3E%3Cg fill=&quot;none&quot; fill-rule=&quot;evenodd&quot;%3E%3Cg fill=&quot;%23ffffff&quot; fill-opacity=&quot;0.4&quot;%3E%3Cpath d=&quot;M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z&quot;/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
+      </div>
+      
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 relative">
+        <!-- Breadcrumb -->
+        <nav class="mb-4">
+          <ol class="flex items-center gap-2 text-sm text-white/60">
+            <li><a href="/" class="hover:text-white transition-colors">Home</a></li>
+            <li><span class="mx-1">/</span></li>
+            <li><a href="/news" class="hover:text-white transition-colors">News</a></li>
+            <li><span class="mx-1">/</span></li>
+            <li class="text-white/80 truncate max-w-[200px]">{article.title}</li>
+          </ol>
+        </nav>
+
+        <!-- Category & Date -->
+        <div class="flex flex-wrap items-center gap-3 mb-4">
           <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
             {displayCategory}
           </span>
           {publishDate && (
             <time class="text-sm text-white/60">{publishDate}</time>
           )}
+          <span class="text-sm text-white/40">•</span>
+          <span class="text-sm text-white/60">By {siteConfig.shortName} Staff</span>
         </div>
+
+        <!-- Title -->
         <h1 class="text-3xl sm:text-4xl lg:text-5xl font-heading font-black text-white leading-tight">
           {article.title}
         </h1>
+
+        <!-- Subtitle -->
         {article.meta_description && (
-          <p class="text-lg text-white/70 mt-4 leading-relaxed">{article.meta_description}</p>
+          <p class="text-lg lg:text-xl text-white/80 mt-4 leading-relaxed">
+            {article.meta_description}
+          </p>
         )}
       </div>
-    </div>
-
-    <!-- Article body -->
-    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-      {article.content ? (
-        <div class="prose-article text-lg" set:html={article.content} />
-      ) : (
-        <p class="text-gray-400 italic">Article content is being prepared. Check back soon.</p>
-      )}
-
-      <!-- Share / back -->
-      <div class="mt-12 pt-8 border-t border-gray-200 flex items-center justify-between">
-        <a href="/news" class="inline-flex items-center gap-2 text-navy-600 font-semibold hover:text-navy-800">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
-          </svg>
-          Back to News
-        </a>
-        <div class="flex items-center gap-3">
-          <span class="text-sm text-gray-400">Share:</span>
-          <a
-            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(`https://classactionlawupdates.com/news/${slug}`)}`}
-            target="_blank"
-            rel="noopener"
-            class="text-gray-400 hover:text-navy-600 transition-colors"
-            aria-label="Share on Twitter"
-          >
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-          </a>
-          <a
-            href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`https://classactionlawupdates.com/news/${slug}`)}`}
-            target="_blank"
-            rel="noopener"
-            class="text-gray-400 hover:text-navy-600 transition-colors"
-            aria-label="Share on Facebook"
-          >
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-          </a>
-        </div>
-      </div>
-    </div>
-  </article>
-</BaseLayout>
+    </heade
