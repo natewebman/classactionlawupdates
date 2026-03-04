@@ -1,12 +1,8 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import { getArticleBySlug, getAllArticleSlugs } from '../../lib/supabase';
+export const prerender = false;
 
-// Generate static paths for all published articles
-export async function getStaticPaths() {
-  const slugs = await getAllArticleSlugs();
-  return slugs.map((slug) => ({ params: { slug } }));
-}
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getArticleBySlug } from '../../lib/supabase';
 
 const { slug } = Astro.params;
 const article = await getArticleBySlug(slug!);
