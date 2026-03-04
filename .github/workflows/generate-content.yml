@@ -35,14 +35,15 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install anthropic supabase psycopg2-binary
+        run: pip install anthropic supabase
 
       - name: Generate Content
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          ADMIN_DB_CONNECTION: ${{ secrets.ADMIN_DB_CONNECTION }}
+          ADMIN_SUPABASE_URL: ${{ secrets.ADMIN_SUPABASE_URL }}
+          ADMIN_SUPABASE_KEY: ${{ secrets.ADMIN_SUPABASE_KEY }}
           ARTICLES_COUNT: ${{ inputs.articles_count || '3' }}
           MODEL: ${{ inputs.model || 'claude-haiku-4-5-20251001' }}
           GENERATION_MODE: ${{ inputs.generation_mode || 'standard' }}
