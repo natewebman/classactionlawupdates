@@ -208,12 +208,9 @@ def write_site_article(supabase_client, article_id: str, article_data: dict, cat
         "slug": unique_slug,
         "content": article_data.get("content", ""),
         "meta_description": article_data.get("meta_description", ""),
-        "primary_keyword": article_data.get("primary_keyword", ""),
         "category": article_data.get("category", category),
         "news_type": article_data.get("news_type", "analysis"),
-        "source_url": article_data.get("source_url", ""),
-        "source_title": article_data.get("source_title", ""),
-        "content_stage": "published",  # Change to "generated" for review-mode sites
+        "content_stage": "published",
         "published_at": datetime.now(timezone.utc).isoformat(),
     }
 
