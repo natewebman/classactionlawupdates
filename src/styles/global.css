@@ -136,4 +136,54 @@
   .prose-article .settlement-section {
     @apply bg-gray-50 rounded-lg p-5 my-6 border border-gray-200;
   }
-  .prose-article .
+  .prose-article .settlement-section h5 {
+    @apply text-sm font-bold text-navy-600 uppercase tracking-wide mb-2;
+  }
+
+  /* Callout boxes */
+  .prose-article .callout {
+    @apply bg-amber-50 border-l-4 border-amber-500 p-4 my-6 rounded-r-lg;
+  }
+  .prose-article .callout-info {
+    @apply bg-blue-50 border-l-4 border-blue-500 p-4 my-6 rounded-r-lg;
+  }
+  .prose-article .callout-success {
+    @apply bg-green-50 border-l-4 border-green-500 p-4 my-6 rounded-r-lg;
+  }
+}
+
+@layer utilities {
+  /* Animate pulse for status indicators */
+  .animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  /* Focus states for accessibility */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-navy-500 focus:ring-offset-2;
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 640px) {
+  .prose-article {
+    @apply text-base;
+  }
+  
+  .prose-article h2 {
+    @apply text-xl;
+  }
+  
+  .prose-article h3 {
+    @apply text-lg;
+  }
+}
