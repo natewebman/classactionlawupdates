@@ -36,19 +36,18 @@ from supabase import create_client
 # =============================================================================
 
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
-SUPABASE_URL = os.environ["SUPABASE_URL"]          # Site DB
-SUPABASE_KEY = os.environ["SUPABASE_KEY"]           # Site DB secret key
-ADMIN_SUPABASE_URL = os.environ.get("ADMIN_SUPABASE_URL", "")  # Admin DB
-ADMIN_SUPABASE_KEY = os.environ.get("ADMIN_SUPABASE_KEY", "")  # Admin DB secret key
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+ADMIN_SUPABASE_URL = os.environ.get("ADMIN_SUPABASE_URL", "")
+ADMIN_SUPABASE_KEY = os.environ.get("ADMIN_SUPABASE_KEY", "")
 
 ARTICLES_COUNT = int(os.environ.get("ARTICLES_COUNT", "3"))
-MODEL = os.environ.get("MODEL", "claude-sonnet-4-5-20250929")  # Upgraded default for better search handling
+MODEL = os.environ.get("MODEL", "claude-sonnet-4-5-20250929")
 GENERATION_MODE = os.environ.get("GENERATION_MODE", "standard")
 CATEGORIES = os.environ.get("CATEGORIES", "")
 ADMIN_RUN_ID = os.environ.get("ADMIN_RUN_ID", "")
-PROMPT_VERSION = os.environ.get("PROMPT_VERSION", "v2")  # Bumped version for web search
+PROMPT_VERSION = os.environ.get("PROMPT_VERSION", "v2")
 
-# Default categories for classactionlawupdates if none specified
 DEFAULT_CATEGORIES = [
     "stocks",
     "personal-injury",
@@ -58,7 +57,6 @@ DEFAULT_CATEGORIES = [
     "online-privacy",
 ]
 
-# Script directory (for finding prompt files)
 SCRIPT_DIR = Path(__file__).parent
 
 
@@ -67,12 +65,10 @@ SCRIPT_DIR = Path(__file__).parent
 # =============================================================================
 
 def sha256_short(text: str) -> str:
-    """SHA256 hash truncated to first 16 hex chars."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
 def load_prompt(filename: str) -> str:
-    """Load a prompt file from scripts/prompts/ directory."""
     prompt_path = SCRIPT_DIR / "prompts" / filename
     if not prompt_path.exists():
         print(f"ERROR: Prompt file not found: {prompt_path}")
@@ -81,30 +77,24 @@ def load_prompt(filename: str) -> str:
 
 
 def slugify(title: str, article_id: str = "") -> str:
-    """Convert a title to a URL-safe slug. Appends short UUID suffix for uniqueness."""
     slug = title.lower().strip()
-    # Replace common characters
     for char in ["'", "\u2019", '"', "\u201c", "\u201d", ":", ";", ",", ".", "!", "?", "(", ")", "[", "]", "&"]:
         slug = slug.replace(char, "")
     slug = slug.replace(" ", "-")
-    # Remove consecutive hyphens
     while "--" in slug:
         slug = slug.replace("--", "-")
     slug = slug.strip("-")[:120]
-    # Append short UUID suffix to guarantee uniqueness against UNIQUE constraint
     if article_id:
         slug = f"{slug}-{article_id[:8]}"
     return slug
 
 
 def pick_categories(count: int) -> list[str]:
-    """Pick categories for this run. Uses input if provided, otherwise random."""
     if CATEGORIES:
         cats = [c.strip() for c in CATEGORIES.split(",") if c.strip()]
     else:
         cats = DEFAULT_CATEGORIES.copy()
         random.shuffle(cats)
-    # Cycle through categories if we need more articles than categories
     result = []
     for i in range(count):
         result.append(cats[i % len(cats)])
@@ -112,7 +102,6 @@ def pick_categories(count: int) -> list[str]:
 
 
 def get_admin_db():
-    """Connect to admin Supabase via supabase-py client."""
     if not ADMIN_SUPABASE_URL or not ADMIN_SUPABASE_KEY:
         return None
     try:
@@ -128,59 +117,57 @@ def get_admin_db():
 # =============================================================================
 
 def generate_article(client: anthropic.Anthropic, system_prompt: str, article_prompt: str) -> dict:
-    """
-    Call Claude API with web search enabled and return parsed article data.
-    Retries up to 3 times with exponential backoff on overload (529) errors.
-    
-    Expects Claude to:
-      1. Search for real lawsuits using web_search tool
-      2. Respond with a JSON object containing:
-         title, slug, content, meta_description, primary_keyword,
-         category, news_type, source_url, source_title
-    """
     max_retries = 3
     for attempt in range(max_retries + 1):
         try:
             response = client.messages.create(
                 model=MODEL,
-                max_tokens=8192,  # Increased for web search + article content
+                max_tokens=8192,
                 system=system_prompt,
                 messages=[{"role": "user", "content": article_prompt}],
                 tools=[
                     {
                         "type": "web_search_20250305",
                         "name": "web_search",
-                        "max_uses": 5,  # Allow multiple searches to find good cases
+                        "max_uses": 5,
                     }
                 ],
             )
-            break  # Success — exit retry loop
+            break
         except anthropic.APIStatusError as e:
-            if e.status_code in (529,) and attempt < max_retries:
-                wait = (2 ** attempt) * 10  # 10s, 20s, 40s
+            if e.status_code == 529 and attempt < max_retries:
+                wait = (2 ** attempt) * 10
                 print(f"  ⏳ API overloaded ({e.status_code}). Retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
                 time.sleep(wait)
             elif e.status_code == 429 and attempt < max_retries:
-                wait = (2 ** attempt) * 15  # 15s, 30s, 60s
+                wait = (2 ** attempt) * 15
                 print(f"  ⏳ Rate limited (429). Retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
                 time.sleep(wait)
             else:
                 raise
 
-    # Extract text content (skip tool_use and web search result blocks)
     raw_text = ""
     for block in response.content:
         if block.type == "text":
             raw_text += block.text
 
-    # Parse JSON from response (Claude may wrap in ```json ... ```)
     json_text = raw_text.strip()
-    if json_text.startswith("```"):
-        # Strip markdown code fences
-        lines = json_text.split("\n")
-        # Remove first line (```json) and last line (```)
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        json_text = "\n".join(lines)
+    
+    # Extract JSON from response - Claude may include explanatory text before/after
+    # Find the first { and last } to extract the JSON object
+    start_idx = json_text.find('{')
+    end_idx = json_text.rfind('}')
+    
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        json_text = json_text[start_idx:end_idx + 1]
+    
+    # Also strip markdown code fences if present
+    if "```json" in json_text:
+        json_text = json_text.split("```json")[-1]
+    if "```" in json_text:
+        json_text = json_text.split("```")[0]
+    
+    json_text = json_text.strip()
 
     try:
         article_data = json.loads(json_text)
@@ -189,7 +176,6 @@ def generate_article(client: anthropic.Anthropic, system_prompt: str, article_pr
         print(f"Raw response:\n{raw_text[:1000]}")
         raise
 
-    # Return article data + token usage
     return {
         "article": article_data,
         "input_tokens": response.usage.input_tokens,
@@ -202,8 +188,6 @@ def generate_article(client: anthropic.Anthropic, system_prompt: str, article_pr
 # =============================================================================
 
 def write_site_article(supabase_client, article_id: str, article_data: dict, category: str, site_id: str):
-    """Write article to the SITE Supabase articles table."""
-    # Always build slug ourselves with UUID suffix for uniqueness
     base_slug = article_data.get("slug") or slugify(article_data.get("title", "untitled"))
     unique_slug = f"{base_slug}-{article_id[:8]}" if not base_slug.endswith(article_id[:8]) else base_slug
 
@@ -225,17 +209,14 @@ def write_site_article(supabase_client, article_id: str, article_data: dict, cat
 
 
 def write_admin_run_article(admin_client, run_article: dict):
-    """Write a run_article row to the ADMIN Supabase."""
     admin_client.table("run_articles").insert(run_article).execute()
 
 
 def update_admin_generation_run(admin_client, run_id: str, stats: dict):
-    """Update generation_runs with totals and completion status."""
     admin_client.table("generation_runs").update(stats).eq("id", run_id).execute()
 
 
 def log_admin_error(admin_client, site_id: str, message: str, details: dict = None):
-    """Write an error to admin DB error_logs table."""
     if not admin_client:
         return
     try:
@@ -254,17 +235,15 @@ def log_admin_error(admin_client, site_id: str, message: str, details: dict = No
 # COST ESTIMATION
 # =============================================================================
 
-# Pricing per 1M tokens (as of March 2026 — update if pricing changes)
 PRICING = {
     "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
     "claude-sonnet-4-5-20250929": {"input": 3.00, "output": 15.00},
 }
-BATCH_DISCOUNT = 0.50  # 50% off for batch mode
+BATCH_DISCOUNT = 0.50
 
 
 def estimate_cost(model: str, input_tokens: int, output_tokens: int, is_batch: bool = False) -> float:
-    """Estimate USD cost for a generation run."""
-    pricing = PRICING.get(model, {"input": 3.00, "output": 15.00})  # Default to Sonnet pricing
+    pricing = PRICING.get(model, {"input": 3.00, "output": 15.00})
     cost = (input_tokens / 1_000_000 * pricing["input"]) + (output_tokens / 1_000_000 * pricing["output"])
     if is_batch:
         cost *= BATCH_DISCOUNT
@@ -276,14 +255,9 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int, is_batch: b
 # =============================================================================
 
 def get_site_id(admin_client) -> str | None:
-    """
-    Look up the site_id from the admin DB generation_runs table.
-    If ADMIN_RUN_ID is set, fetch site_id from that run and mark it in_progress.
-    """
     if not admin_client or not ADMIN_RUN_ID:
         return None
     try:
-        # Update status and get site_id
         result = admin_client.table("generation_runs") \
             .update({"workflow_status": "in_progress"}) \
             .eq("id", ADMIN_RUN_ID) \
@@ -312,7 +286,6 @@ def main():
     print(f"Admin Run ID: {ADMIN_RUN_ID or '(none — standalone run)'}")
     print(f"=" * 60)
 
-    # ── Load prompts ──────────────────────────────────────────────
     system_prompt = load_prompt("system_prompt.txt")
     article_prompt_template = load_prompt("article_prompt.txt")
 
@@ -322,24 +295,18 @@ def main():
     print(f"System prompt hash:  {system_prompt_hash}")
     print(f"Article prompt template hash: {article_prompt_template_hash}")
 
-    # ── Initialize clients ────────────────────────────────────────
     claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     site_db = create_client(SUPABASE_URL, SUPABASE_KEY)
     admin_conn = get_admin_db()
 
-    # ── Batch mode guard ──────────────────────────────────────────
     if GENERATION_MODE == "batch":
         print("WARNING: Batch mode (Anthropic Batch API) is not yet implemented.")
         print("         Falling back to standard mode for this run.")
-        print("         Batch mode requires batch-poll.yml to process results.")
-        # Don't change GENERATION_MODE — cost estimation should still reflect intent
 
-    # ── Resolve site_id from admin DB (via generation_runs) ───────
     site_id = get_site_id(admin_conn)
     if admin_conn and ADMIN_RUN_ID and not site_id:
         print("WARNING: Could not resolve site_id. Admin writes will be skipped for run_articles.")
 
-    # ── Resolve site_id from SITE DB if not available from admin ──
     site_db_site_id = None
     try:
         sites_result = site_db.table("sites").select("id").limit(1).execute()
@@ -349,10 +316,8 @@ def main():
     except Exception as e:
         print(f"WARNING: Could not look up site_id from site DB: {e}")
 
-    # ── Pick categories ───────────────────────────────────────────
     categories = pick_categories(ARTICLES_COUNT)
 
-    # ── Generate articles ─────────────────────────────────────────
     total_input_tokens = 0
     total_output_tokens = 0
     articles_generated = 0
@@ -370,15 +335,12 @@ def main():
         print(f"  🔍 Searching for real lawsuits...")
 
         try:
-            # Build the article-specific prompt
             article_prompt = article_prompt_template.replace("{{category}}", category)
             article_prompt = article_prompt.replace("{{article_number}}", str(i + 1))
             article_prompt = article_prompt.replace("{{total_articles}}", str(ARTICLES_COUNT))
 
-            # Per-article hash of the ACTUAL prompt sent to Claude
             article_prompt_hash = sha256_short(article_prompt)
 
-            # Call Claude with web search
             result = generate_article(claude, system_prompt, article_prompt)
             article_data = result["article"]
             input_tokens = result["input_tokens"]
@@ -397,13 +359,11 @@ def main():
             print(f"  Source: {source_url[:60]}..." if len(source_url) > 60 else f"  Source: {source_url}")
             print(f"  Tokens: {input_tokens} in / {output_tokens} out")
 
-            # ── Write to SITE DB ──────────────────────────────────
             write_site_article(site_db, article_id, article_data, category, site_db_site_id)
             print(f"  ✓ Site DB: written")
             articles_generated += 1
             articles_published += 1
 
-            # ── Write to ADMIN DB ─────────────────────────────────
             if admin_conn and ADMIN_RUN_ID and site_id:
                 write_admin_run_article(admin_conn, {
                     "run_id": ADMIN_RUN_ID,
@@ -439,7 +399,6 @@ def main():
                 "traceback": traceback.format_exc(),
             })
 
-    # ── Update generation_runs with totals ────────────────────────
     duration = int(time.time() - start_time)
     is_batch = GENERATION_MODE == "batch"
     cost = estimate_cost(MODEL, total_input_tokens, total_output_tokens, is_batch)
@@ -463,7 +422,6 @@ def main():
             print(f"\n✗ Failed to update generation_run: {e}")
             traceback.print_exc()
 
-    # ── Summary ───────────────────────────────────────────────────
     print(f"\n{'=' * 60}")
     print(f"DONE")
     print(f"  Generated:  {articles_generated}")
@@ -474,7 +432,6 @@ def main():
     print(f"  Duration:   {duration}s")
     print(f"{'=' * 60}")
 
-    # Exit with error code if any articles failed
     if articles_failed > 0 and articles_generated == 0:
         sys.exit(1)
 
