@@ -50,14 +50,12 @@ PROMPT_VERSION = os.environ.get("PROMPT_VERSION", "v1")
 
 # Default categories for classactionlawupdates if none specified
 DEFAULT_CATEGORIES = [
-    "Consumer Protection",
-    "Employment Law",
-    "Data Privacy",
-    "Product Liability",
-    "Securities Fraud",
-    "Environmental",
-    "Healthcare",
-    "Antitrust",
+    "stocks",
+    "personal-injury",
+    "product-recalls",
+    "drugs-pharmacy",
+    "financial",
+    "online-privacy",
 ]
 
 # Script directory (for finding prompt files)
