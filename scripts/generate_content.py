@@ -209,7 +209,7 @@ def write_site_article(supabase_client, article_id: str, article_data: dict, cat
         "meta_description": article_data.get("meta_description", ""),
         "category": article_data.get("category", category),
         "news_type": article_data.get("news_type", "analysis"),
-        "content_stage": "published",
+        "content_stage": "draft",
         "published_at": datetime.now(timezone.utc).isoformat(),
     }
 
