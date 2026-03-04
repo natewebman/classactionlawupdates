@@ -1,10 +1,11 @@
 ---
+export const prerender = false;
+
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
 import { getArticles } from '../../lib/supabase';
 import { siteConfig } from '../../site.config';
 
-// At build time, fetch all published news articles
 const allNews = await getArticles({ limit: 50 });
 ---
 
