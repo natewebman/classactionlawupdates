@@ -5,6 +5,6 @@ import cloudflare from '@astrojs/cloudflare';
 export default defineConfig({
   site: 'https://classactionlawupdates.com',
   integrations: [tailwind()],
-  output: 'hybrid',
+  output: 'static',
   adapter: cloudflare(),
 });
