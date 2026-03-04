@@ -1,0 +1,141 @@
+---
+interface Props {
+  status?: string;
+  claimDeadline?: string;
+  claimUrl?: string;
+  proofRequired?: boolean;
+  potentialReward?: string;
+  totalAmount?: string;
+  location?: string;
+  caseName?: string;
+  settlementWebsite?: string;
+  claimsAdministrator?: string;
+  classCounsel?: string;
+}
+
+const {
+  status = 'In Progress',
+  claimDeadline,
+  claimUrl,
+  proofRequired,
+  potentialReward,
+  totalAmount,
+  location,
+  caseName,
+  settlementWebsite,
+  claimsAdministrator,
+  classCounsel,
+} = Astro.props;
+
+const hasClaimDetails = claimDeadline || claimUrl || potentialReward || totalAmount;
+---
+
+<aside class="claim-details-sidebar">
+  <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden sticky top-24">
+    <div class="bg-navy-600 px-5 py-4">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+        <span class="text-white font-semibold text-sm">Status: {status}</span>
+      </div>
+      {caseName && (
+        <p class="text-white/70 text-xs mt-2 leading-relaxed">{caseName}</p>
+      )}
+    </div>
+
+    {hasClaimDetails && (
+      <div class="p-5 space-y-4">
+        {claimUrl && (
+          
+            href={claimUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="block w-full text-center px-5 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-md hover:shadow-lg"
+          >
+            File a Claim →
+          </a>
+        )}
+
+        <dl class="space-y-3 text-sm">
+          {claimDeadline && (
+            <div class="flex justify-between items-start gap-2">
+              <dt class="text-gray-500 font-medium">Claim Deadline</dt>
+              <dd class="text-gray-900 font-semibold text-right">{claimDeadline}</dd>
+            </div>
+          )}
+          
+          {proofRequired !== undefined && (
+            <div class="flex justify-between items-start gap-2">
+              <dt class="text-gray-500 font-medium">Proof Required</dt>
+              <dd class="text-gray-900 font-semibold">{proofRequired ? 'Yes' : 'No'}</dd>
+            </div>
+          )}
+          
+          {potentialReward && (
+            <div class="flex justify-between items-start gap-2">
+              <dt class="text-gray-500 font-medium">Potential Award</dt>
+              <dd class="text-gray-900 font-semibold text-right">{potentialReward}</dd>
+            </div>
+          )}
+          
+          {totalAmount && (
+            <div class="flex justify-between items-start gap-2">
+              <dt class="text-gray-500 font-medium">Settlement Amount</dt>
+              <dd class="text-gray-900 font-semibold text-right">{totalAmount}</dd>
+            </div>
+          )}
+          
+          {location && (
+            <div class="flex justify-between items-start gap-2">
+              <dt class="text-gray-500 font-medium">Location</dt>
+              <dd class="text-gray-900 font-semibold text-right">{location}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+    )}
+
+    {(settlementWebsite || claimsAdministrator || classCounsel) && (
+      <div class="border-t border-gray-100 p-5 space-y-3 text-sm">
+        {settlementWebsite && (
+          <div>
+            <dt class="text-gray-500 font-medium mb-1">Settlement Website</dt>
+            <dd>
+              <a 
+                href={settlementWebsite.startsWith('http') ? settlementWebsite : `https://${settlementWebsite}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-navy-600 hover:text-navy-800 underline break-all"
+              >
+                {settlementWebsite.replace(/^https?:\/\//, '')}
+              </a>
+            </dd>
+          </div>
+        )}
+        
+        {claimsAdministrator && (
+          <div>
+            <dt class="text-gray-500 font-medium mb-1">Claims Administrator</dt>
+            <dd class="text-gray-700 whitespace-pre-line">{claimsAdministrator}</dd>
+          </div>
+        )}
+        
+        {classCounsel && (
+          <div>
+            <dt class="text-gray-500 font-medium mb-1">Class Counsel</dt>
+            <dd class="text-gray-700 whitespace-pre-line">{classCounsel}</dd>
+          </div>
+        )}
+      </div>
+    )}
+
+    <div class="border-t border-gray-100 p-5 bg-gray-50">
+      <p class="text-sm font-semibold text-gray-900 mb-2">Get notified about settlements</p>
+      <a 
+        href="/signup" 
+        class="block w-full text-center px-4 py-2.5 bg-navy-600 hover:bg-navy-700 text-white font-medium rounded-lg transition-colors text-sm"
+      >
+        Sign Up for Alerts
+      </a>
+    </div>
+  </div>
+</aside>
