@@ -134,17 +134,37 @@ def get_admin_db():
 def generate_article(client: anthropic.Anthropic, system_prompt: str, article_prompt: str) -> dict:
     """
     Call Claude API and return parsed article data.
+    Retries up to 3 times with exponential backoff on overload (529) errors.
     
     Expects Claude to respond with a JSON object containing:
       title, slug, content, meta_description, primary_keyword,
       category, news_type, source_url, source_title
     """
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=4096,
-        system=system_prompt,
-        messages=[{"role": "user", "content": article_prompt}],
-    )
+    max_retries = 3
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.messages.create(
+                model=MODEL,
+                max_tokens=4096,
+                system=system_prompt,
+                messages=[{"role": "user", "content": article_prompt}],
+            )
+            break  # Success — exit retry loop
+        except anthropic.OverloadedError as e:
+            if attempt < max_retries:
+                wait = (2 ** attempt) * 10  # 10s, 20s, 40s
+                print(f"  ⏳ API overloaded (529). Retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(wait)
+            else:
+                print(f"  ✗ API overloaded after {max_retries} retries. Giving up.")
+                raise
+        except anthropic.RateLimitError as e:
+            if attempt < max_retries:
+                wait = (2 ** attempt) * 15  # 15s, 30s, 60s
+                print(f"  ⏳ Rate limited (429). Retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(wait)
+            else:
+                raise
 
     # Extract text content
     raw_text = ""
