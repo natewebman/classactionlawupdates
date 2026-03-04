@@ -29,8 +29,6 @@ from datetime import datetime, timezone
 
 import anthropic
 from supabase import create_client
-import psycopg2
-from psycopg2.extras import Json
 
 
 # =============================================================================
@@ -39,8 +37,9 @@ from psycopg2.extras import Json
 
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 SUPABASE_URL = os.environ["SUPABASE_URL"]          # Site DB
-SUPABASE_KEY = os.environ["SUPABASE_KEY"]           # Site DB service role
-ADMIN_DB_CONNECTION = os.environ.get("ADMIN_DB_CONNECTION", "")  # Postgres conn string for github_writer
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]           # Site DB secret key
+ADMIN_SUPABASE_URL = os.environ.get("ADMIN_SUPABASE_URL", "")  # Admin DB
+ADMIN_SUPABASE_KEY = os.environ.get("ADMIN_SUPABASE_KEY", "")  # Admin DB secret key
 
 ARTICLES_COUNT = int(os.environ.get("ARTICLES_COUNT", "3"))
 MODEL = os.environ.get("MODEL", "claude-haiku-4-5-20251001")
@@ -115,13 +114,12 @@ def pick_categories(count: int) -> list[str]:
 
 
 def get_admin_db():
-    """Connect to admin Supabase via psycopg2 using github_writer role."""
-    if not ADMIN_DB_CONNECTION:
+    """Connect to admin Supabase via supabase-py client."""
+    if not ADMIN_SUPABASE_URL or not ADMIN_SUPABASE_KEY:
         return None
     try:
-        conn = psycopg2.connect(ADMIN_DB_CONNECTION)
-        conn.autocommit = False
-        return conn
+        client = create_client(ADMIN_SUPABASE_URL, ADMIN_SUPABASE_KEY)
+        return client
     except Exception as e:
         print(f"WARNING: Could not connect to admin DB: {e}")
         return None
@@ -219,58 +217,28 @@ def write_site_article(supabase_client, article_id: str, article_data: dict, cat
     return result
 
 
-def write_admin_run_article(conn, run_article: dict):
-    """Write a run_article row to the ADMIN Supabase via github_writer role."""
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO run_articles (
-            run_id, site_id, public_article_id,
-            title, slug, category,
-            prompt_version, system_prompt_hash, article_prompt_hash,
-            model_used, temperature, top_p, generation_params,
-            status, word_count, input_tokens, output_tokens
-        ) VALUES (
-            %(run_id)s, %(site_id)s, %(public_article_id)s,
-            %(title)s, %(slug)s, %(category)s,
-            %(prompt_version)s, %(system_prompt_hash)s, %(article_prompt_hash)s,
-            %(model_used)s, %(temperature)s, %(top_p)s, %(generation_params)s,
-            %(status)s, %(word_count)s, %(input_tokens)s, %(output_tokens)s
-        )
-    """, run_article)
-    conn.commit()
+def write_admin_run_article(admin_client, run_article: dict):
+    """Write a run_article row to the ADMIN Supabase."""
+    admin_client.table("run_articles").insert(run_article).execute()
 
 
-def update_admin_generation_run(conn, run_id: str, stats: dict):
+def update_admin_generation_run(admin_client, run_id: str, stats: dict):
     """Update generation_runs with totals and completion status."""
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE generation_runs SET
-            workflow_status = %(workflow_status)s,
-            articles_generated = %(articles_generated)s,
-            articles_published = %(articles_published)s,
-            articles_failed = %(articles_failed)s,
-            completed_at = %(completed_at)s,
-            duration_seconds = %(duration_seconds)s,
-            total_input_tokens = %(total_input_tokens)s,
-            total_output_tokens = %(total_output_tokens)s,
-            estimated_cost_usd = %(estimated_cost_usd)s,
-            error_log = %(error_log)s
-        WHERE id = %(run_id)s
-    """, {**stats, "run_id": run_id})
-    conn.commit()
+    admin_client.table("generation_runs").update(stats).eq("id", run_id).execute()
 
 
-def log_admin_error(conn, site_id: str, message: str, details: dict = None):
+def log_admin_error(admin_client, site_id: str, message: str, details: dict = None):
     """Write an error to admin DB error_logs table."""
-    if not conn:
+    if not admin_client:
         return
     try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO error_logs (site_id, source, severity, message, details)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (site_id, "generate_content", "error", message, Json(details or {})))
-        conn.commit()
+        admin_client.table("error_logs").insert({
+            "site_id": site_id,
+            "source": "generate_content",
+            "severity": "error",
+            "message": message,
+            "details": details or {},
+        }).execute()
     except Exception as e:
         print(f"WARNING: Failed to log error to admin DB: {e}")
 
@@ -300,35 +268,24 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int, is_batch: b
 # SITE ID LOOKUP
 # =============================================================================
 
-def get_site_id(conn) -> str | None:
+def get_site_id(admin_client) -> str | None:
     """
-    Look up the site_id for classactionlawupdates from the admin DB.
-    NOTE: github_writer doesn't have SELECT on sites, so we resolve
-    the site_id from the generation_runs row (which we can UPDATE).
-    
-    If ADMIN_RUN_ID is set, we extract site_id from the UPDATE RETURNING.
-    Otherwise, we skip admin writes.
+    Look up the site_id from the admin DB generation_runs table.
+    If ADMIN_RUN_ID is set, fetch site_id from that run and mark it in_progress.
     """
-    if not conn or not ADMIN_RUN_ID:
+    if not admin_client or not ADMIN_RUN_ID:
         return None
     try:
-        cur = conn.cursor()
-        # Use a lightweight update to retrieve site_id from the run
-        # (github_writer can UPDATE generation_runs)
-        cur.execute("""
-            UPDATE generation_runs
-            SET workflow_status = 'in_progress'
-            WHERE id = %s
-            RETURNING site_id
-        """, (ADMIN_RUN_ID,))
-        row = cur.fetchone()
-        conn.commit()
-        if row:
-            return str(row[0])
+        # Update status and get site_id
+        result = admin_client.table("generation_runs") \
+            .update({"workflow_status": "in_progress"}) \
+            .eq("id", ADMIN_RUN_ID) \
+            .execute()
+        if result.data and len(result.data) > 0:
+            return str(result.data[0].get("site_id", ""))
         return None
     except Exception as e:
         print(f"WARNING: Could not get site_id from admin DB: {e}")
-        conn.rollback()
         return None
 
 
@@ -450,7 +407,7 @@ def main():
                     "model_used": MODEL,
                     "temperature": None,
                     "top_p": None,
-                    "generation_params": Json({}),
+                    "generation_params": {},
                     "status": "published",
                     "word_count": word_count,
                     "input_tokens": input_tokens,
@@ -494,10 +451,6 @@ def main():
         except Exception as e:
             print(f"\n✗ Failed to update generation_run: {e}")
             traceback.print_exc()
-
-    # ── Close admin connection ────────────────────────────────────
-    if admin_conn:
-        admin_conn.close()
 
     # ── Summary ───────────────────────────────────────────────────
     print(f"\n{'=' * 60}")
