@@ -9,7 +9,7 @@ Flow:
   3. Hash prompts → SHA256[:16] for integrity tracking
   4. For each article:
      a. Generate a shared UUID (used in BOTH site DB and admin DB)
-     b. Call Claude API with the configured model
+     b. Call Claude API with web search enabled
      c. Parse structured JSON response
      d. Write article to SITE Supabase (articles table)
      e. Write run_article to ADMIN Supabase (run_articles table)
@@ -42,11 +42,11 @@ ADMIN_SUPABASE_URL = os.environ.get("ADMIN_SUPABASE_URL", "")  # Admin DB
 ADMIN_SUPABASE_KEY = os.environ.get("ADMIN_SUPABASE_KEY", "")  # Admin DB secret key
 
 ARTICLES_COUNT = int(os.environ.get("ARTICLES_COUNT", "3"))
-MODEL = os.environ.get("MODEL", "claude-haiku-4-5-20251001")
+MODEL = os.environ.get("MODEL", "claude-sonnet-4-5-20250929")  # Upgraded default for better search handling
 GENERATION_MODE = os.environ.get("GENERATION_MODE", "standard")
 CATEGORIES = os.environ.get("CATEGORIES", "")
 ADMIN_RUN_ID = os.environ.get("ADMIN_RUN_ID", "")
-PROMPT_VERSION = os.environ.get("PROMPT_VERSION", "v1")
+PROMPT_VERSION = os.environ.get("PROMPT_VERSION", "v2")  # Bumped version for web search
 
 # Default categories for classactionlawupdates if none specified
 DEFAULT_CATEGORIES = [
@@ -124,30 +124,39 @@ def get_admin_db():
 
 
 # =============================================================================
-# CLAUDE API
+# CLAUDE API WITH WEB SEARCH
 # =============================================================================
 
 def generate_article(client: anthropic.Anthropic, system_prompt: str, article_prompt: str) -> dict:
     """
-    Call Claude API and return parsed article data.
+    Call Claude API with web search enabled and return parsed article data.
     Retries up to 3 times with exponential backoff on overload (529) errors.
     
-    Expects Claude to respond with a JSON object containing:
-      title, slug, content, meta_description, primary_keyword,
-      category, news_type, source_url, source_title
+    Expects Claude to:
+      1. Search for real lawsuits using web_search tool
+      2. Respond with a JSON object containing:
+         title, slug, content, meta_description, primary_keyword,
+         category, news_type, source_url, source_title
     """
     max_retries = 3
     for attempt in range(max_retries + 1):
         try:
             response = client.messages.create(
                 model=MODEL,
-                max_tokens=4096,
+                max_tokens=8192,  # Increased for web search + article content
                 system=system_prompt,
                 messages=[{"role": "user", "content": article_prompt}],
+                tools=[
+                    {
+                        "type": "web_search_20250305",
+                        "name": "web_search",
+                        "max_uses": 5,  # Allow multiple searches to find good cases
+                    }
+                ],
             )
             break  # Success — exit retry loop
         except anthropic.APIStatusError as e:
-            if e.status_code in (529, 529) and attempt < max_retries:
+            if e.status_code in (529,) and attempt < max_retries:
                 wait = (2 ** attempt) * 10  # 10s, 20s, 40s
                 print(f"  ⏳ API overloaded ({e.status_code}). Retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
                 time.sleep(wait)
@@ -158,7 +167,7 @@ def generate_article(client: anthropic.Anthropic, system_prompt: str, article_pr
             else:
                 raise
 
-    # Extract text content
+    # Extract text content (skip tool_use and web search result blocks)
     raw_text = ""
     for block in response.content:
         if block.type == "text":
@@ -177,7 +186,7 @@ def generate_article(client: anthropic.Anthropic, system_prompt: str, article_pr
         article_data = json.loads(json_text)
     except json.JSONDecodeError as e:
         print(f"ERROR: Failed to parse Claude response as JSON: {e}")
-        print(f"Raw response:\n{raw_text[:500]}")
+        print(f"Raw response:\n{raw_text[:1000]}")
         raise
 
     # Return article data + token usage
@@ -255,7 +264,7 @@ BATCH_DISCOUNT = 0.50  # 50% off for batch mode
 
 def estimate_cost(model: str, input_tokens: int, output_tokens: int, is_batch: bool = False) -> float:
     """Estimate USD cost for a generation run."""
-    pricing = PRICING.get(model, {"input": 1.00, "output": 5.00})
+    pricing = PRICING.get(model, {"input": 3.00, "output": 15.00})  # Default to Sonnet pricing
     cost = (input_tokens / 1_000_000 * pricing["input"]) + (output_tokens / 1_000_000 * pricing["output"])
     if is_batch:
         cost *= BATCH_DISCOUNT
@@ -299,6 +308,7 @@ def main():
     print(f"Articles: {ARTICLES_COUNT}")
     print(f"Mode: {GENERATION_MODE}")
     print(f"Prompt Version: {PROMPT_VERSION}")
+    print(f"Web Search: ENABLED")
     print(f"Admin Run ID: {ADMIN_RUN_ID or '(none — standalone run)'}")
     print(f"=" * 60)
 
@@ -357,6 +367,7 @@ def main():
         print(f"\n── Article {i + 1}/{ARTICLES_COUNT} ──")
         print(f"  UUID:     {article_id}")
         print(f"  Category: {category}")
+        print(f"  🔍 Searching for real lawsuits...")
 
         try:
             # Build the article-specific prompt
@@ -367,7 +378,7 @@ def main():
             # Per-article hash of the ACTUAL prompt sent to Claude
             article_prompt_hash = sha256_short(article_prompt)
 
-            # Call Claude
+            # Call Claude with web search
             result = generate_article(claude, system_prompt, article_prompt)
             article_data = result["article"]
             input_tokens = result["input_tokens"]
@@ -378,10 +389,12 @@ def main():
             title = article_data.get("title", "Untitled")
             slug = f"{article_data.get('slug') or slugify(title)}-{article_id[:8]}"
             word_count = len(article_data.get("content", "").split())
+            source_url = article_data.get("source_url", "")
 
             print(f"  Title:  {title}")
             print(f"  Slug:   {slug}")
             print(f"  Words:  {word_count}")
+            print(f"  Source: {source_url[:60]}..." if len(source_url) > 60 else f"  Source: {source_url}")
             print(f"  Tokens: {input_tokens} in / {output_tokens} out")
 
             # ── Write to SITE DB ──────────────────────────────────
@@ -405,7 +418,7 @@ def main():
                     "model_used": MODEL,
                     "temperature": None,
                     "top_p": None,
-                    "generation_params": {},
+                    "generation_params": {"web_search": True},
                     "status": "published",
                     "word_count": word_count,
                     "input_tokens": input_tokens,
