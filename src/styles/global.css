@@ -7,6 +7,7 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    scroll-padding-top: 80px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -73,10 +74,13 @@
     @apply text-gray-700 leading-relaxed;
   }
   .prose-article h2 {
-    @apply text-2xl font-bold text-gray-900 mt-8 mb-4 font-heading;
+    @apply text-2xl font-bold text-gray-900 mt-10 mb-4 font-heading pb-2 border-b border-gray-200;
   }
   .prose-article h3 {
-    @apply text-xl font-bold text-gray-900 mt-6 mb-3 font-heading;
+    @apply text-xl font-bold text-gray-900 mt-8 mb-3 font-heading;
+  }
+  .prose-article h4 {
+    @apply text-lg font-semibold text-gray-800 mt-6 mb-2 font-heading;
   }
   .prose-article p {
     @apply mb-4;
@@ -97,6 +101,39 @@
     @apply text-navy-600 underline hover:text-navy-800;
   }
   .prose-article blockquote {
-    @apply border-l-4 border-navy-300 pl-4 italic text-gray-600 my-4;
+    @apply border-l-4 border-navy-300 pl-4 italic text-gray-600 my-6;
   }
-}
+  .prose-article img {
+    @apply rounded-lg my-6 shadow-sm;
+  }
+  .prose-article table {
+    @apply w-full my-6 border-collapse;
+  }
+  .prose-article th {
+    @apply bg-gray-100 text-left px-4 py-2 font-semibold border border-gray-200;
+  }
+  .prose-article td {
+    @apply px-4 py-2 border border-gray-200;
+  }
+
+  /* Line clamp utility */
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Claim details sidebar */
+  .claim-details-sidebar dl {
+    @apply divide-y divide-gray-100;
+  }
+  .claim-details-sidebar dl > div {
+    @apply py-2;
+  }
+
+  /* Structured settlement sections */
+  .prose-article .settlement-section {
+    @apply bg-gray-50 rounded-lg p-5 my-6 border border-gray-200;
+  }
+  .prose-article .
