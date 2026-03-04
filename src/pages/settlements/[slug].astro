@@ -1,11 +1,12 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import { getArticleBySlug, getAllArticleSlugs } from '../../lib/supabase';
+export const prerender = false;
 
-export async function getStaticPaths() {
-  const slugs = await getAllArticleSlugs();
-  return slugs.map((slug) => ({ params: { slug } }));
-}
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CaseStatusTracker from '../../components/CaseStatusTracker.astro';
+import ClaimDetailsSidebar from '../../components/ClaimDetailsSidebar.astro';
+import RelatedArticles from '../../components/RelatedArticles.astro';
+import { getArticleBySlug } from '../../lib/supabase';
+import { siteConfig } from '../../site.config';
 
 const { slug } = Astro.params;
 const article = await getArticleBySlug(slug!);
@@ -23,47 +24,116 @@ const publishDate = article.published_at
   : null;
 
 const displayCategory = article.category ?? 'Settlement';
+
+// Settlement metadata - extend your Article type or add these fields to Supabase
+const meta = {
+  status: (article as any).case_status ?? 'filed',
+  claimDeadline: (article as any).claim_deadline ?? null,
+  claimUrl: (article as any).claim_url ?? null,
+  proofRequired: (article as any).proof_required ?? null,
+  potentialReward: (article as any).potential_reward ?? null,
+  totalAmount: (article as any).settlement_amount ?? null,
+  location: (article as any).location ?? null,
+  caseName: (article as any).case_name ?? null,
+  settlementWebsite: (article as any).settlement_website ?? null,
+  claimsAdministrator: (article as any).claims_administrator ?? null,
+  classCounsel: (article as any).class_counsel ?? null,
+  heroImage: (article as any).hero_image ?? null,
+};
+
+const hasSidebarData = meta.claimDeadline || meta.claimUrl || meta.potentialReward || 
+                       meta.totalAmount || meta.settlementWebsite;
+
+// SEO structured data
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": article.title,
+  "description": article.meta_description,
+  "datePublished": article.published_at,
+  "dateModified": article.updated_at,
+  "publisher": {
+    "@type": "Organization",
+    "name": siteConfig.name,
+    "url": `https://${siteConfig.domain}`
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": `https://${siteConfig.domain}/settlements/${slug}`
+  }
+};
 ---
 
 <BaseLayout title={article.title} description={article.meta_description ?? ''}>
-  <article class="bg-white">
-    <!-- Article header -->
-    <div class="bg-gradient-to-br from-navy-700 to-navy-900 py-12 lg:py-16">
-      <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
+  <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+
+  <article class="bg-gray-50 min-h-screen">
+    <!-- Hero Header -->
+    <header class="bg-gradient-to-br from-navy-700 via-navy-800 to-navy-900 relative overflow-hidden">
+      <div class="absolute inset-0 opacity-10">
+        <div class="absolute inset-0" style="background-image: url('data:image/svg+xml,%3Csvg width=&quot;60&quot; height=&quot;60&quot; viewBox=&quot;0 0 60 60&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;%3E%3Cg fill=&quot;none&quot; fill-rule=&quot;evenodd&quot;%3E%3Cg fill=&quot;%23ffffff&quot; fill-opacity=&quot;0.4&quot;%3E%3Cpath d=&quot;M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z&quot;/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
+      </div>
+      
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 relative">
+        <!-- Breadcrumb -->
+        <nav class="mb-4">
+          <ol class="flex items-center gap-2 text-sm text-white/60">
+            <li><a href="/" class="hover:text-white transition-colors">Home</a></li>
+            <li><span class="mx-1">/</span></li>
+            <li><a href="/settlements" class="hover:text-white transition-colors">Settlements</a></li>
+            <li><span class="mx-1">/</span></li>
+            <li class="text-white/80 truncate max-w-[200px]">{article.title}</li>
+          </ol>
+        </nav>
+
+        <!-- Category & Date -->
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <a 
+            href={`/category/${displayCategory.toLowerCase().replace(/\s+/g, '-')}`}
+            class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white hover:bg-white/30 transition-colors"
+          >
             {displayCategory}
-          </span>
+          </a>
           {publishDate && (
             <time class="text-sm text-white/60">{publishDate}</time>
           )}
         </div>
-        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-heading font-black text-white leading-tight">
+
+        <!-- Title -->
+        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-heading font-black text-white leading-tight max-w-4xl">
           {article.title}
         </h1>
+
+        <!-- Subtitle -->
         {article.meta_description && (
-          <p class="text-lg text-white/70 mt-4 leading-relaxed">{article.meta_description}</p>
+          <p class="text-lg lg:text-xl text-white/80 mt-4 leading-relaxed max-w-3xl">
+            {article.meta_description}
+          </p>
         )}
-      </div>
-    </div>
 
-    <!-- Article body -->
-    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-      {article.content ? (
-        <div class="prose-article text-lg" set:html={article.content} />
-      ) : (
-        <p class="text-gray-400 italic">Article content is being prepared. Check back soon.</p>
-      )}
-
-      <!-- Back -->
-      <div class="mt-12 pt-8 border-t border-gray-200">
-        <a href="/settlements" class="inline-flex items-center gap-2 text-navy-600 font-semibold hover:text-navy-800">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
-          </svg>
-          Back to Settlements
-        </a>
+        <!-- Case Status Tracker -->
+        <div class="mt-8 bg-white/10 backdrop-blur-sm rounded-xl p-4 lg:p-6">
+          <CaseStatusTracker status={meta.status} />
+        </div>
       </div>
-    </div>
-  </article>
-</BaseLayout>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
+      <div class="lg:grid lg:grid-cols-12 lg:gap-10">
+        
+        <!-- Main Content Column -->
+        <main class="lg:col-span-8">
+          <!-- Hero Image -->
+          {meta.heroImage && (
+            <figure class="mb-8 -mt-4 lg:-mt-8">
+              <img 
+                src={meta.heroImage} 
+                alt={article.title}
+                class="w-full h-auto rounded-xl shadow-lg object-cover max-h-[400px]"
+                loading="eager"
+              />
+            </figure>
+          )}
+
+          <!-- Mobile: Claim Details Card -->
