@@ -150,16 +150,12 @@ def generate_article(client: anthropic.Anthropic, system_prompt: str, article_pr
                 messages=[{"role": "user", "content": article_prompt}],
             )
             break  # Success — exit retry loop
-        except anthropic.OverloadedError as e:
-            if attempt < max_retries:
+        except anthropic.APIStatusError as e:
+            if e.status_code in (529, 529) and attempt < max_retries:
                 wait = (2 ** attempt) * 10  # 10s, 20s, 40s
-                print(f"  ⏳ API overloaded (529). Retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
+                print(f"  ⏳ API overloaded ({e.status_code}). Retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
                 time.sleep(wait)
-            else:
-                print(f"  ✗ API overloaded after {max_retries} retries. Giving up.")
-                raise
-        except anthropic.RateLimitError as e:
-            if attempt < max_retries:
+            elif e.status_code == 429 and attempt < max_retries:
                 wait = (2 ** attempt) * 15  # 15s, 30s, 60s
                 print(f"  ⏳ Rate limited (429). Retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
                 time.sleep(wait)
