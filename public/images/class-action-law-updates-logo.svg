@@ -1,5 +1,5 @@
-<svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-  
+<svg width="480" height="60" viewBox="0 0 480 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg x="0" y="0" width="60" height="60" viewBox="0 0 60 60">
   <circle cx="30" cy="30" r="28" stroke="rgba(26,45,90,0.2)" stroke-width="1.5"/>
   <circle cx="30" cy="30" r="22" fill="rgba(26,45,90,0.04)"/>
   <rect x="29.1" y="14" width="1.8" height="32" rx="0.9" fill="#1a2d5a"/>
@@ -17,5 +17,11 @@
   <rect x="28.5" y="46" width="3" height="5" rx="1" fill="#1a2d5a"/>
   <rect x="22" y="50.5" width="16" height="2.5" rx="1.25" fill="#1a2d5a"/>
   <rect x="19" y="53" width="22" height="2" rx="1" fill="rgba(26,45,90,0.5)"/>
-
+</svg>
+  <text x="72" y="39"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-weight="700"
+    font-size="28"
+    letter-spacing="2.5"
+    fill="#1a2d5a">Class Action Law Updates</text>
 </svg>

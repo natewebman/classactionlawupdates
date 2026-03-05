@@ -1,66 +1,94 @@
 ---
-import { getArticles, type Article } from '../lib/supabase';
-
 interface Props {
-  currentSlug: string;
-  category?: string;
-  limit?: number;
+  status: string;
 }
 
-const { currentSlug, category, limit = 4 } = Astro.props;
+const { status } = Astro.props;
 
-let articles: Article[] = [];
-try {
-  const allArticles = await getArticles({ 
-    category: category && category !== 'General' ? category : undefined,
-    limit: limit + 1 
-  });
-  articles = allArticles.filter(a => a.slug !== currentSlug).slice(0, limit);
-} catch (e) {
-  console.error('Error fetching related articles:', e);
+const steps = [
+  { key: 'filed', label: 'Lawsuit Filed' },
+  { key: 'certified', label: 'Class Certified' },
+  { key: 'approved', label: 'Settlement Approved' },
+  { key: 'open', label: 'Open for Claims' },
+];
+
+const statusMap: Record<string, number> = {
+  filed: 0,
+  certified: 1,
+  approved: 2,
+  open: 3,
+};
+
+const currentStep = statusMap[status] ?? 0;
+
+function iconBoxClasses(i: number): string {
+  const base = 'w-16 h-16 sm:w-20 sm:h-20 rounded-xl flex items-center justify-center border-2 transition-all';
+  if (i === currentStep) return `${base} bg-blue-50 border-blue-500 shadow-md`;
+  if (i <= currentStep) return `${base} bg-blue-50 border-blue-400`;
+  return `${base} bg-gray-50 border-gray-200`;
+}
+
+function iconClasses(i: number): string {
+  const base = 'w-8 h-8 sm:w-9 sm:h-9';
+  return i <= currentStep ? `${base} text-blue-600` : `${base} text-gray-400`;
+}
+
+function labelClasses(i: number): string {
+  const base = 'text-xs sm:text-sm font-medium mt-2 text-center leading-tight';
+  if (i === currentStep) return `${base} text-gray-900 font-semibold`;
+  if (i <= currentStep) return `${base} text-gray-700`;
+  return `${base} text-gray-400`;
+}
+
+function barWidth(i: number): string {
+  if (i < currentStep) return '100%';
+  if (i === currentStep) return '50%';
+  return '0%';
 }
 ---
 
-{articles.length > 0 && (
-  <section class="related-articles mt-12 pt-10 border-t border-gray-200">
-    <h2 class="text-2xl font-heading font-bold text-gray-900 mb-6">Related Settlements & News</h2>
-    
-    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-      {articles.map((article) => {
-        const date = article.published_at 
-          ? new Date(article.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-          : null;
-        const isSettlement = article.category && article.category !== 'General';
-        const href = isSettlement ? `/settlements/${article.slug}` : `/news/${article.slug}`;
-        
-        return (
-          <a href={href} class="group block">
-            <article class="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow h-full flex flex-col">
-              <div class="aspect-video bg-gradient-to-br from-navy-100 to-navy-200 relative overflow-hidden">
-                <div class="absolute inset-0 flex items-center justify-center">
-                  <svg class="w-12 h-12 text-navy-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
-                  </svg>
-                </div>
-              </div>
-              
-              <div class="p-4 flex-1 flex flex-col">
-                {article.category && (
-                  <span class="text-xs font-semibold text-navy-600 uppercase tracking-wide mb-1">
-                    {article.category}
-                  </span>
-                )}
-                <h3 class="font-heading font-bold text-gray-900 leading-snug group-hover:text-navy-600 transition-colors line-clamp-3 flex-1">
-                  {article.title}
-                </h3>
-                {date && (
-                  <time class="text-xs text-gray-500 mt-2">{date}</time>
-                )}
-              </div>
-            </article>
-          </a>
-        );
-      })}
+<div class="case-status-tracker">
+  <div class="flex items-start justify-between relative">
+    {steps.map((step, i) => (
+      <div class="flex flex-col items-center relative z-10" style="flex: 1;">
+        <div class={iconBoxClasses(i)}>
+          {i === 0 && (
+            <svg class={iconClasses(i)} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 01-2.031.352 5.988 5.988 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.97zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 01-2.031.352 5.989 5.989 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.97z" />
+            </svg>
+          )}
+          {i === 1 && (
+            <svg class={iconClasses(i)} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+            </svg>
+          )}
+          {i === 2 && (
+            <svg class={iconClasses(i)} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.05 4.575a1.575 1.575 0 10-3.15 0v3m3.15-3v-1.5a1.575 1.575 0 013.15 0v1.5m-3.15 0l.075 5.925m3.075.75V4.575m0 0a1.575 1.575 0 013.15 0V15M6.9 7.575a1.575 1.575 0 10-3.15 0v8.175a6.75 6.75 0 006.75 6.75h2.018a5.25 5.25 0 003.712-1.538l1.732-1.732a5.25 5.25 0 001.538-3.712l.003-2.024a.668.668 0 01.198-.471 1.575 1.575 0 10-2.228-2.228 3.818 3.818 0 00-1.12 2.687M6.9 7.575V12m6.27 4.318A4.49 4.49 0 0116.35 15m.002 0h-.002" />
+            </svg>
+          )}
+          {i === 3 && (
+            <svg class={iconClasses(i)} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+            </svg>
+          )}
+        </div>
+        <span class={labelClasses(i)}>
+          {step.label}
+        </span>
+      </div>
+    ))}
+
+    {/* Progress bars between steps */}
+    <div class="absolute top-8 sm:top-10 left-0 right-0 flex z-0" style="padding: 0 12.5%;">
+      {[0, 1, 2].map((i) => (
+        <div class="flex-1 h-1.5 mx-1 rounded-full overflow-hidden bg-gray-200">
+          <div
+            class="h-full bg-blue-500 rounded-full transition-all duration-500"
+            style={`width: ${barWidth(i)};`}
+          />
+        </div>
+      ))}
     </div>
-  </section>
-)}
+  </div>
+</div>

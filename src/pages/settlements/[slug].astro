@@ -3,8 +3,7 @@ export const prerender = false;
 
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import CaseStatusTracker from '../../components/CaseStatusTracker.astro';
-import ClaimDetailsSidebar from '../../components/ClaimDetailsSidebar.astro';
-import RelatedArticles from '../../components/RelatedArticles.astro';
+import SettlementSidebar from '../../components/SettlementSidebar.astro';
 import { getArticleBySlug } from '../../lib/supabase';
 import { siteConfig } from '../../site.config';
 import { marked } from 'marked';
@@ -27,24 +26,24 @@ const publishDate = article.published_at
 const displayCategory = article.category ?? 'Settlement';
 
 const meta = {
-  status: (article as any).case_status ?? 'filed',
-  claimDeadline: (article as any).claim_deadline ?? null,
-  claimUrl: (article as any).claim_url ?? null,
-  proofRequired: (article as any).proof_required ?? null,
-  potentialReward: (article as any).potential_reward ?? null,
-  totalAmount: (article as any).settlement_amount ?? null,
-  location: (article as any).location ?? null,
-  caseName: (article as any).case_name ?? null,
-  settlementWebsite: (article as any).settlement_website ?? null,
-  claimsAdministrator: (article as any).claims_administrator ?? null,
-  classCounsel: (article as any).class_counsel ?? null,
-  heroImage: (article as any).hero_image ?? null,
+  status: article.case_status ?? 'filed',
+  claimDeadline: article.claim_deadline ?? null,
+  claimUrl: article.claim_url ?? null,
+  proofRequired: article.proof_required ?? null,
+  potentialReward: article.potential_reward ?? null,
+  totalAmount: article.settlement_amount ?? null,
+  location: article.location ?? null,
+  caseName: article.case_name ?? null,
+  settlementWebsite: article.settlement_website ?? null,
+  claimsAdministrator: article.claims_administrator ?? null,
+  classCounsel: article.class_counsel ?? null,
+  heroImage: article.hero_image ?? null,
+  heroImageAlt: article.hero_image_alt ?? null,
 };
 
-const hasSidebarData = meta.claimDeadline || meta.claimUrl || meta.potentialReward || 
-                       meta.totalAmount || meta.settlementWebsite;
+const pageUrl = `https://${siteConfig.domain}/settlements/${slug}`;
 
-const structuredData = {
+const structuredData: Record<string, unknown> = {
   "@context": "https://schema.org",
   "@type": "Article",
   "headline": article.title,
@@ -58,179 +57,246 @@ const structuredData = {
   },
   "mainEntityOfPage": {
     "@type": "WebPage",
-    "@id": `https://${siteConfig.domain}/settlements/${slug}`
-  }
+    "@id": pageUrl
+  },
+  ...(meta.heroImage ? { "image": meta.heroImage } : {}),
 };
 ---
 
-<BaseLayout title={article.title} description={article.meta_description ?? ''}>
+<BaseLayout title={article.title} description={article.meta_description ?? ''} ogImage={meta.heroImage ?? undefined}>
   <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
 
-  <article class="bg-gray-50 min-h-screen">
-    <header class="bg-gradient-to-br from-navy-700 via-navy-800 to-navy-900 relative overflow-hidden">
-      <div class="absolute inset-0 opacity-10">
-        <div class="absolute inset-0" style="background-image: url('data:image/svg+xml,%3Csvg width=&quot;60&quot; height=&quot;60&quot; viewBox=&quot;0 0 60 60&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;%3E%3Cg fill=&quot;none&quot; fill-rule=&quot;evenodd&quot;%3E%3Cg fill=&quot;%23ffffff&quot; fill-opacity=&quot;0.4&quot;%3E%3Cpath d=&quot;M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z&quot;/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
-      </div>
-      
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 relative">
-        <nav class="mb-4">
-          <ol class="flex items-center gap-2 text-sm text-white/60">
-            <li><a href="/" class="hover:text-white transition-colors">Home</a></li>
-            <li><span class="mx-1">/</span></li>
-            <li><a href="/settlements" class="hover:text-white transition-colors">Settlements</a></li>
-            <li><span class="mx-1">/</span></li>
-            <li class="text-white/80 truncate max-w-[200px]">{article.title}</li>
-          </ol>
-        </nav>
+  <article class="settlement-page bg-white">
+    <!-- Header area -->
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
+      <!-- Breadcrumbs -->
+      <nav class="mb-6">
+        <ol class="flex items-center gap-1.5 text-sm text-gray-500">
+          <li><a href="/" class="hover:text-navy-600 transition-colors">Home</a></li>
+          <li><span class="mx-1">&gt;</span></li>
+          <li><a href="/settlements" class="hover:text-navy-600 transition-colors">Settlements</a></li>
+          <li><span class="mx-1">&gt;</span></li>
+          <li class="text-gray-700 truncate max-w-[300px]">{article.title}</li>
+        </ol>
+      </nav>
 
-        <div class="flex flex-wrap items-center gap-3 mb-4">
-          <a 
-            href={`/category/${displayCategory.toLowerCase().replace(/\s+/g, '-')}`}
-            class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white hover:bg-white/30 transition-colors"
-          >
-            {displayCategory}
-          </a>
+      <!-- Title -->
+      <h1 class="text-3xl sm:text-4xl lg:text-[2.75rem] font-heading font-black text-gray-900 leading-tight mb-8">
+        {article.title}
+      </h1>
+
+      <!-- Status Tracker -->
+      <div class="mb-8 max-w-3xl mx-auto">
+        <CaseStatusTracker status={meta.status} />
+      </div>
+
+      <!-- Byline & Category -->
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-2">
+        <div class="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+          <span>By {siteConfig.name}</span>
           {publishDate && (
-            <time class="text-sm text-white/60">{publishDate}</time>
+            <Fragment>
+              <span class="text-gray-300">|</span>
+              <time>{publishDate}</time>
+            </Fragment>
           )}
         </div>
-
-        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-heading font-black text-white leading-tight max-w-4xl">
-          {article.title}
-        </h1>
-
-        {article.meta_description && (
-          <p class="text-lg lg:text-xl text-white/80 mt-4 leading-relaxed max-w-3xl">
-            {article.meta_description}
-          </p>
-        )}
-
-        <div class="mt-8 bg-white/10 backdrop-blur-sm rounded-xl p-4 lg:p-6">
-          <CaseStatusTracker status={meta.status} />
-        </div>
       </div>
-    </header>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
+      <div class="mb-4">
+        <span class="text-sm font-semibold text-gray-700">Category: </span>
+        <a
+          href={`/category/${displayCategory.toLowerCase().replace(/\s+/g, '-')}`}
+          class="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+        >
+          {displayCategory}
+        </a>
+      </div>
+
+      <!-- Divider -->
+      <hr class="border-t-[3px] border-gray-900 mb-4" />
+
+      <!-- Social Share Icons -->
+      <div class="flex items-center gap-3 mb-6">
+        <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}`}
+          target="_blank"
+          rel="noopener"
+          class="w-9 h-9 flex items-center justify-center rounded-full bg-[#1877F2] text-white hover:opacity-80 transition-opacity"
+          aria-label="Share on Facebook"
+        >
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+        </a>
+        <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(pageUrl)}`}
+          target="_blank"
+          rel="noopener"
+          class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-900 text-white hover:opacity-80 transition-opacity"
+          aria-label="Share on X"
+        >
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+        <a href={`https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(pageUrl)}&title=${encodeURIComponent(article.title)}`}
+          target="_blank"
+          rel="noopener"
+          class="w-9 h-9 flex items-center justify-center rounded-full bg-[#0A66C2] text-white hover:opacity-80 transition-opacity"
+          aria-label="Share on LinkedIn"
+        >
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+        </a>
+        <a href={`mailto:?subject=${encodeURIComponent(article.title)}&body=${encodeURIComponent(pageUrl)}`}
+          class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-500 text-white hover:opacity-80 transition-opacity"
+          aria-label="Share via Email"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
       <div class="lg:grid lg:grid-cols-12 lg:gap-10">
-        
+
+        <!-- Main Column -->
         <main class="lg:col-span-8">
+          <!-- Hero Image -->
           {meta.heroImage && (
-            <figure class="mb-8 -mt-4 lg:-mt-8">
-              <img 
-                src={meta.heroImage} 
-                alt={article.title}
-                class="w-full h-auto rounded-xl shadow-lg object-cover max-h-[400px]"
+            <figure class="mb-8">
+              <img
+                src={meta.heroImage}
+                alt={meta.heroImageAlt ?? article.title}
+                class="w-full h-auto rounded-lg object-cover max-h-[460px]"
                 loading="eager"
               />
             </figure>
           )}
 
+          <!-- Mobile Claim CTA (shown on small screens only) -->
           <div class="lg:hidden mb-8">
-            {hasSidebarData && (
-              <div class="bg-white rounded-xl shadow-lg border border-gray-100 p-5">
-                <div class="flex items-center gap-2 mb-4">
-                  <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                  <span class="font-semibold text-gray-900">Status: {meta.status === 'open' ? 'Open for Claims' : 'In Progress'}</span>
-                </div>
-                
-             {meta.claimUrl && (
-                  
-                   <a href={meta.claimUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="block w-full text-center px-5 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors mb-4"
-                  >
-                    File a Claim →
-                  </a>
-                )}
-                
-                <dl class="grid grid-cols-2 gap-3 text-sm">
-                  {meta.claimDeadline && (
-                    <div>
-                      <dt class="text-gray-500">Deadline</dt>
-                      <dd class="font-semibold text-gray-900">{meta.claimDeadline}</dd>
-                    </div>
-                  )}
-                  {meta.potentialReward && (
-                    <div>
-                      <dt class="text-gray-500">Potential Award</dt>
-                      <dd class="font-semibold text-gray-900">{meta.potentialReward}</dd>
-                    </div>
-                  )}
-                  {meta.location && (
-                    <div>
-                      <dt class="text-gray-500">Location</dt>
-                      <dd class="font-semibold text-gray-900">{meta.location}</dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
+            {meta.claimUrl && (
+              <a href={meta.claimUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="block w-full text-center px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors text-lg uppercase tracking-wide"
+              >
+                Click Here to File a Claim &raquo;
+              </a>
             )}
           </div>
 
-          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8 lg:p-10">
+          <!-- Article Body -->
+          <div class="settlement-article-body">
             {article.content ? (
-              <div class="prose-article text-lg" set:html={marked.parse(article.content)} />
+              <div class="prose-article text-[17px] leading-relaxed" set:html={marked.parse(article.content)} />
             ) : (
               <p class="text-gray-400 italic">Article content is being prepared. Check back soon.</p>
             )}
           </div>
 
-          <div class="mt-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <a href="/settlements" class="inline-flex items-center gap-2 text-navy-600 font-semibold hover:text-navy-800 transition-colors">
+          <!-- Inline Claim Button -->
+          {meta.claimUrl && (
+            <div class="my-10">
+              <h2 class="settlement-detail-heading">Claim Form</h2>
+              <a href={meta.claimUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-block px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded transition-colors text-base uppercase tracking-wide"
+              >
+                Click Here to File a Claim &raquo;
+              </a>
+              <p class="text-sm text-gray-600 mt-3">
+                <strong>NOTE:</strong> If you do not qualify for this settlement do NOT file a claim.
+              </p>
+            </div>
+          )}
+
+          <!-- Settlement Details Section -->
+          <div class="settlement-details-section mt-8 space-y-8">
+            {meta.claimDeadline && (
+              <div>
+                <h2 class="settlement-detail-heading">Claim Form Deadline</h2>
+                <p class="text-gray-800">{meta.claimDeadline}</p>
+              </div>
+            )}
+
+            {meta.potentialReward && (
+              <div>
+                <h2 class="settlement-detail-heading">Potential Award</h2>
+                <p class="text-gray-800">{meta.potentialReward}</p>
+              </div>
+            )}
+
+            {meta.totalAmount && (
+              <div>
+                <h2 class="settlement-detail-heading">Settlement Amount</h2>
+                <p class="text-gray-800">{meta.totalAmount}</p>
+              </div>
+            )}
+
+            {meta.proofRequired !== null && meta.proofRequired !== undefined && (
+              <div>
+                <h2 class="settlement-detail-heading">Proof of Purchase</h2>
+                <p class="text-gray-800">{meta.proofRequired ? 'Yes - documentation required' : 'No proof required'}</p>
+              </div>
+            )}
+
+            {meta.location && (
+              <div>
+                <h2 class="settlement-detail-heading">Location</h2>
+                <p class="text-gray-800">{meta.location}</p>
+              </div>
+            )}
+
+            {meta.caseName && (
+              <div>
+                <h2 class="settlement-detail-heading">Case Name</h2>
+                <p class="text-gray-800">{meta.caseName}</p>
+              </div>
+            )}
+
+            {meta.settlementWebsite && (
+              <div>
+                <h2 class="settlement-detail-heading">Settlement Website</h2>
+                <p>
+                  <a
+                    href={meta.settlementWebsite.startsWith('http') ? meta.settlementWebsite : `https://${meta.settlementWebsite}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-blue-600 hover:text-blue-800 transition-colors"
+                  >
+                    {meta.settlementWebsite.replace(/^https?:\/\//, '')}
+                  </a>
+                </p>
+              </div>
+            )}
+
+            {meta.claimsAdministrator && (
+              <div>
+                <h2 class="settlement-detail-heading">Claims Administrator</h2>
+                <p class="text-gray-800 whitespace-pre-line">{meta.claimsAdministrator}</p>
+              </div>
+            )}
+
+            {meta.classCounsel && (
+              <div>
+                <h2 class="settlement-detail-heading">Class Counsel</h2>
+                <p class="text-gray-800 whitespace-pre-line">{meta.classCounsel}</p>
+              </div>
+            )}
+          </div>
+
+          <!-- Back link -->
+          <div class="mt-12 pt-8 border-t border-gray-200">
+            <a href="/settlements" class="inline-flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-800 transition-colors">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
               </svg>
-              Back to Settlements
+              Back to All Settlements
             </a>
-            
-            <div class="flex items-center gap-3">
-              <span class="text-sm text-gray-500">Share:</span>
-              <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(`https://${siteConfig.domain}/settlements/${slug}`)}`}
-                target="_blank"
-                rel="noopener"
-                class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-navy-600 hover:text-white transition-colors"
-                aria-label="Share on Twitter"
-              >
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-              </a>
-              <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`https://${siteConfig.domain}/settlements/${slug}`)}`}
-                target="_blank"
-                rel="noopener"
-                class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-navy-600 hover:text-white transition-colors"
-                aria-label="Share on Facebook"
-              >
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-              </a>
-              <a href={`https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(`https://${siteConfig.domain}/settlements/${slug}`)}&title=${encodeURIComponent(article.title)}`}
-                target="_blank"
-                rel="noopener"
-                class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-navy-600 hover:text-white transition-colors"
-                aria-label="Share on LinkedIn"
-              >
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-              </a>
-            </div>
           </div>
-
-          <RelatedArticles currentSlug={slug!} category={displayCategory} />
         </main>
 
+        <!-- Sidebar -->
         <aside class="hidden lg:block lg:col-span-4">
-          <ClaimDetailsSidebar
-            status={meta.status === 'open' ? 'Open for Claims' : 'In Progress'}
-            claimDeadline={meta.claimDeadline}
-            claimUrl={meta.claimUrl}
-            proofRequired={meta.proofRequired}
-            potentialReward={meta.potentialReward}
-            totalAmount={meta.totalAmount}
-            location={meta.location}
-            caseName={meta.caseName}
-            settlementWebsite={meta.settlementWebsite}
-            claimsAdministrator={meta.claimsAdministrator}
-            classCounsel={meta.classCounsel}
-          />
+          <SettlementSidebar currentSlug={slug!} category={displayCategory} />
         </aside>
       </div>
     </div>

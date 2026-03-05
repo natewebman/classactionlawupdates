@@ -10,12 +10,17 @@
         "astro": "astro"
     },
     "dependencies": {
-        "marked": "^15.0.7",
         "@astrojs/cloudflare": "^12.0.0",
         "@astrojs/tailwind": "^6.0.2",
         "@supabase/supabase-js": "^2.49.1",
         "astro": "^5.7.0",
         "marked": "^17.0.4",
         "tailwindcss": "^3.4.17"
+    },
+    "devDependencies": {
+        "@anthropic-ai/sdk": "^0.78.0",
+        "dotenv": "^17.3.1",
+        "replicate": "^1.4.0",
+        "tsx": "^4.21.0"
     }
 }
