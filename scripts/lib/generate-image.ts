@@ -65,7 +65,7 @@ Respond with ONLY the image prompt, nothing else.`,
 // Step 2 – Generate the image via Claude (native image generation)
 // ---------------------------------------------------------------------------
 
-const IMAGE_MODEL = "claude-sonnet-4-5-20250514";
+const IMAGE_MODEL = "claude-sonnet-4-5";
 
 export async function generateImage(
   prompt: string
