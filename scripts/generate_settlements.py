@@ -36,7 +36,26 @@ ADMIN_SUPABASE_URL = os.environ.get("ADMIN_SUPABASE_URL", "")
 ADMIN_SUPABASE_KEY = os.environ.get("ADMIN_SUPABASE_KEY", "")
 
 ARTICLES_COUNT = int(os.environ.get("ARTICLES_COUNT", "3"))
-MODEL = os.environ.get("MODEL", "claude-haiku-4-5-20251001")
+
+# Model alias map — allows friendly names from admin panel
+MODEL_ALIASES = {
+    "haiku 4.5": "claude-haiku-4-5-20251001",
+    "haiku": "claude-haiku-4-5-20251001",
+    "haiku-4.5": "claude-haiku-4-5-20251001",
+    "claude haiku 4.5": "claude-haiku-4-5-20251001",
+    "sonnet 4.5": "claude-sonnet-4-5-20250929",
+    "sonnet": "claude-sonnet-4-5-20250929",
+    "sonnet-4.5": "claude-sonnet-4-5-20250929",
+    "claude sonnet 4.5": "claude-sonnet-4-5-20250929",
+    "opus 4.5": "claude-opus-4-5-20250918",
+    "opus": "claude-opus-4-5-20250918",
+    "opus-4.5": "claude-opus-4-5-20250918",
+    "claude opus 4.5": "claude-opus-4-5-20250918",
+}
+
+_raw_model = os.environ.get("MODEL", "claude-haiku-4-5-20251001")
+MODEL = MODEL_ALIASES.get(_raw_model.lower().strip(), _raw_model)
+
 GENERATION_MODE = os.environ.get("GENERATION_MODE", "standard")
 CATEGORIES = os.environ.get("CATEGORIES", "")
 ADMIN_RUN_ID = os.environ.get("ADMIN_RUN_ID", "")
