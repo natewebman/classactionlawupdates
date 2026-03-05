@@ -1,0 +1,29 @@
+STEP 1: Search for OPEN class action settlements in the "{{category}}" category.
+- Search for terms like "{{category}} class action settlement claim" or "{{category}} settlement deadline 2025 2026"
+- Look for settlements where people can STILL file claims (not expired)
+- Prioritize settlements with clear deadlines and claim processes
+
+STEP 2: Pick ONE specific settlement from your search results.
+- Choose a settlement that has concrete details: claim deadline, settlement amount, eligibility criteria
+- This is article {{article_number}} of {{total_articles}} — pick a settlement that readers can actually act on
+- MUST be a settlement where the claim deadline has NOT passed
+
+STEP 3: Write the article about ONLY that one settlement.
+- Every detail must come from your search results
+- The title must match the content — both about the same settlement
+
+REQUIRED SECTIONS in your article:
+1. **What Happened** — Brief background on the lawsuit and what the company allegedly did
+2. **Who Qualifies** — Clear eligibility criteria (who can file a claim)
+3. **What You Can Get** — Specific payment amounts or ranges claimants can expect
+4. **How to File a Claim** — Step-by-step instructions, include the claim URL if available
+5. **Important Deadlines** — Claim deadline, hearing dates, payment timeline
+6. **What Proof You Need** — Documentation required (receipts, account info, etc.)
+
+CRITICAL RULES:
+- Do not mix details from different settlements
+- Only include settlements with future claim deadlines
+- Content must be at least 800 words
+- Use proper HTML formatting (<h2>, <h3>, <p>, <ul>, <li>)
+
+Respond with ONLY the JSON object as specified in your instructions.
