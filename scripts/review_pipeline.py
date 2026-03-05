@@ -209,8 +209,8 @@ def human_rewrite(claude_client: anthropic.Anthropic, article: dict) -> str:
             "Rewrite the provided article so it reads as if written by an experienced human journalist. "
             "Use natural flow, varied sentence lengths, and an authoritative but conversational tone. "
             "Avoid all AI writing patterns: no overuse of bullet points, no repetitive transition phrases, "
-            "no generic openers like 'In today\u2019s world' or closers like 'In conclusion'. "
-            "Keep every fact exactly as given \u2014 do not add or remove information. "
+            "no generic openers like 'In today's world' or closers like 'In conclusion'. "
+            "Keep every fact exactly as given — do not add or remove information. "
             "Return ONLY the rewritten article content. No preamble, no explanation."
         ),
         messages=[
@@ -228,36 +228,58 @@ def human_rewrite(claude_client: anthropic.Anthropic, article: dict) -> str:
 
 
 # =============================================================================
-# REGENERATE (called when fact check fails)
+# REGENERATE (called when fact check fails) - NOW WITH WEB SEARCH
 # =============================================================================
 
 def regenerate(claude_client: anthropic.Anthropic, article: dict) -> str:
     """
     Regenerate content for an article that failed fact-checking.
-    Uses the category and original title as context but writes fresh, accurate content.
+    Uses web search to find a REAL lawsuit in the same category.
+    Returns the new article content.
     """
+    category = article.get('category', 'consumer protection')
+    
     response = claude_client.messages.create(
         model=REWRITE_MODEL,
-        max_tokens=4096,
+        max_tokens=8192,
         system=(
-            "You are a legal content writer. Write factual, accurate articles about real, "
-            "well-documented class action lawsuits. Only write about cases you are highly confident "
-            "are real. Include real case names, real defendant companies, and accurate details."
+            "You are a legal content writer for ClassActionLawUpdates.com. "
+            "You have web search enabled. ALWAYS search for real, current class action lawsuits before writing. "
+            "Only write about lawsuits you found in your search results. Never invent case details. "
+            "Return ONLY the article content in HTML format using <h2>, <h3>, <p>, <ul>, <li> tags. "
+            "Do not include any preamble, explanation, or JSON wrapper — just the article HTML content."
         ),
         messages=[
             {
                 "role": "user",
                 "content": (
-                    f"Write a new, fully accurate article about a real class action lawsuit "
-                    f"in the '{article.get('category', 'Consumer Protection')}' category. "
-                    f"The previous article titled '{article['title']}' contained inaccurate "
-                    f"or hallucinated information and must be replaced entirely. "
-                    f"Choose a real, well-documented case. Return only the article content."
+                    f"The previous article titled '{article['title']}' failed fact-checking because it contained "
+                    f"inaccurate or hallucinated information.\n\n"
+                    f"STEP 1: Search the web for real class action lawsuits in the '{category}' category. "
+                    f"Use search terms like '{category} class action lawsuit 2025' or '{category} class action settlement'.\n\n"
+                    f"STEP 2: Pick ONE real, well-documented lawsuit from your search results.\n\n"
+                    f"STEP 3: Write a new article (minimum 800 words) about that specific lawsuit. "
+                    f"Include real case names, real defendant companies, real court names, and accurate details from your search.\n\n"
+                    f"Return ONLY the article content in HTML format. No preamble, no JSON."
                 ),
             }
         ],
+        tools=[
+            {
+                "type": "web_search_20250305",
+                "name": "web_search",
+                "max_uses": 5,
+            }
+        ],
     )
-    return response.content[0].text.strip()
+    
+    # Extract text content from response (skip tool use blocks)
+    raw_text = ""
+    for block in response.content:
+        if block.type == "text":
+            raw_text += block.text
+    
+    return raw_text.strip()
 
 
 # =============================================================================
@@ -295,7 +317,7 @@ def process_article(article: dict, site_db, admin_db, claude_client: anthropic.A
                 sync_admin_stage(admin_db, article_id, "failed")
                 return False
 
-            print(f"   ↻ Regenerating article (attempt {attempt}/{MAX_REGEN_ATTEMPTS})...")
+            print(f"   ↻ Regenerating article with web search (attempt {attempt}/{MAX_REGEN_ATTEMPTS})...")
             new_content = regenerate(claude_client, article)
             article["content"] = new_content
             update_stage(site_db, article_id, "draft", new_content)
