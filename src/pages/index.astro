@@ -38,6 +38,8 @@ const latestNews = await getArticles({ newsType: 'case-filings', limit: 3 });
               category={article.category}
               metaDescription={article.meta_description}
               publishedAt={article.published_at}
+              heroImage={article.hero_image}
+              heroImageAlt={article.hero_image_alt}
               basePath="/settlements"
               featured={i === 0}
             />
@@ -86,6 +88,8 @@ const latestNews = await getArticles({ newsType: 'case-filings', limit: 3 });
               newsType={article.news_type}
               metaDescription={article.meta_description}
               publishedAt={article.published_at}
+              heroImage={article.hero_image}
+              heroImageAlt={article.hero_image_alt}
               basePath="/news"
             />
           ))}

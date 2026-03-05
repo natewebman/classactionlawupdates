@@ -35,6 +35,22 @@ export interface Article {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  // Image fields
+  hero_image: string | null;
+  hero_image_alt: string | null;
+  hero_image_filename: string | null;
+  // Settlement-specific fields
+  case_status: string | null;
+  claim_deadline: string | null;
+  claim_url: string | null;
+  proof_required: boolean | null;
+  potential_reward: string | null;
+  settlement_amount: string | null;
+  location: string | null;
+  case_name: string | null;
+  settlement_website: string | null;
+  claims_administrator: string | null;
+  class_counsel: string | null;
 }
 
 /**

@@ -44,6 +44,8 @@ const allNews = await getArticles({ limit: 50 });
                 newsType={article.news_type}
                 metaDescription={article.meta_description}
                 publishedAt={article.published_at}
+                heroImage={article.hero_image}
+                heroImageAlt={article.hero_image_alt}
                 basePath="/news"
               />
             </div>

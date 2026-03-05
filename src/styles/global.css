@@ -150,6 +150,17 @@
   .prose-article .callout-success {
     @apply bg-green-50 border-l-4 border-green-500 p-4 my-6 rounded-r-lg;
   }
+
+  /* Settlement detail section headings (TCA-style serif headings) */
+  .settlement-detail-heading {
+    @apply text-2xl font-heading font-bold text-gray-900 mb-3;
+    font-style: italic;
+  }
+
+  /* Settlement page - remove prose h2 bottom borders within settlement details */
+  .settlement-details-section h2 {
+    @apply border-b-0 pb-0;
+  }
 }
 
 @layer utilities {

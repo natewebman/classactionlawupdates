@@ -1,0 +1,35 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Vertical center pillar -->
+  <rect x="19.2" y="8" width="1.6" height="24" rx="0.8" fill="currentColor"/>
+
+  <!-- Horizontal beam / crossbar -->
+  <rect x="5" y="11" width="30" height="2" rx="1" fill="currentColor"/>
+
+  <!-- Top finial -->
+  <polygon points="20,4 21.5,7 18.5,7" fill="currentColor"/>
+
+  <!-- Left hanging chain -->
+  <circle cx="10" cy="14.5" r="0.7" fill="currentColor" opacity="0.85"/>
+  <circle cx="10" cy="17" r="0.7" fill="currentColor" opacity="0.85"/>
+  <circle cx="10" cy="19.5" r="0.7" fill="currentColor" opacity="0.85"/>
+
+  <!-- Right hanging chain -->
+  <circle cx="30" cy="14.5" r="0.7" fill="currentColor" opacity="0.85"/>
+  <circle cx="30" cy="17" r="0.7" fill="currentColor" opacity="0.85"/>
+  <circle cx="30" cy="19.5" r="0.7" fill="currentColor" opacity="0.85"/>
+
+  <!-- Left pan -->
+  <path d="M5.5 21.5 C5.5 21.5 7 25.5 10 25.5 C13 25.5 14.5 21.5 14.5 21.5 Z" fill="currentColor" opacity="0.5"/>
+  <path d="M5.5 21.5 Q10 24.5 14.5 21.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+  <line x1="5.5" y1="21.5" x2="14.5" y2="21.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Right pan -->
+  <path d="M25.5 21.5 C25.5 21.5 27 25.5 30 25.5 C33 25.5 34.5 21.5 34.5 21.5 Z" fill="currentColor" opacity="0.5"/>
+  <path d="M25.5 21.5 Q30 24.5 34.5 21.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+  <line x1="25.5" y1="21.5" x2="34.5" y2="21.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Base platform -->
+  <rect x="15" y="32" width="10" height="1.8" rx="0.9" fill="currentColor"/>
+  <!-- Base plinth -->
+  <rect x="13" y="33.8" width="14" height="2" rx="1" fill="currentColor" opacity="0.8"/>
+</svg>

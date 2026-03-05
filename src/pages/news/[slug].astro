@@ -23,9 +23,10 @@ const publishDate = article.published_at
   : null;
 
 const displayCategory = article.category ?? article.news_type ?? 'News';
-const heroImage = (article as any).hero_image ?? null;
+const heroImage = article.hero_image ?? null;
+const heroImageAlt = article.hero_image_alt ?? null;
 
-const structuredData = {
+const structuredData: Record<string, unknown> = {
   "@context": "https://schema.org",
   "@type": "NewsArticle",
   "headline": article.title,
@@ -40,11 +41,12 @@ const structuredData = {
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": `https://${siteConfig.domain}/news/${slug}`
-  }
+  },
+  ...(heroImage ? { "image": heroImage } : {}),
 };
 ---
 
-<BaseLayout title={article.title} description={article.meta_description ?? ''}>
+<BaseLayout title={article.title} description={article.meta_description ?? ''} ogImage={heroImage ?? undefined}>
   <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
 
   <article class="bg-gray-50 min-h-screen">
@@ -91,9 +93,9 @@ const structuredData = {
       {heroImage && (
         <figure class="mb-8 -mt-6">
           <img 
-            src={heroImage} 
-            alt={article.title}
-            class="w-full h-auto rounded-xl shadow-lg object-cover max-h-[450px]"
+            src={heroImage}
+            alt={heroImageAlt ?? article.title}
+            class="w-full h-auto rounded-xl shadow-lg object-cover max-h-[460px]"
             loading="eager"
           />
         </figure>

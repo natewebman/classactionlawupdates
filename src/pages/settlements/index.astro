@@ -43,6 +43,8 @@ const allSettlements = await getArticles({ limit: 50 });
                 category={article.category}
                 metaDescription={article.meta_description}
                 publishedAt={article.published_at}
+                heroImage={article.hero_image}
+                heroImageAlt={article.hero_image_alt}
                 basePath="/settlements"
               />
             </div>
