@@ -10,6 +10,7 @@
         "astro": "astro"
     },
     "dependencies": {
+        "marked": "^15.0.7",
         "@astrojs/cloudflare": "^12.0.0",
         "@astrojs/tailwind": "^6.0.2",
         "@supabase/supabase-js": "^2.49.1",
