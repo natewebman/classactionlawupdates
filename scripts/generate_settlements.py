@@ -169,20 +169,27 @@ def generate_settlement(client: anthropic.Anthropic, system_prompt: str, article
             raw_text += block.text
 
     json_text = raw_text.strip()
-    
+
+    # If response has no JSON at all, Claude likely couldn't find a settlement
+    if '{' not in json_text:
+        raise ValueError(
+            f"Claude did not return JSON — likely no active settlement found for this category. "
+            f"Response preview: {raw_text[:300]}"
+        )
+
     # Extract JSON from response - Claude may include explanatory text before/after
     start_idx = json_text.find('{')
     end_idx = json_text.rfind('}')
-    
+
     if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
         json_text = json_text[start_idx:end_idx + 1]
-    
+
     # Strip markdown code fences if present
     if "```json" in json_text:
         json_text = json_text.split("```json")[-1]
     if "```" in json_text:
         json_text = json_text.split("```")[0]
-    
+
     json_text = json_text.strip()
 
     try:
