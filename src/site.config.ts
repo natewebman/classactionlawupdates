@@ -13,10 +13,10 @@ export const siteConfig = {
 
   // Contact
   contact: {
-    address: 'PO BOX 49043',
-    city: 'Charlotte',
-    state: 'NC',
-    zip: '28277',
+    address: 'PO Box 195546',
+    city: 'Winter Springs',
+    state: 'FL',
+    zip: '32719',
   },
 
   // Navigation categories
