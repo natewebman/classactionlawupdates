@@ -134,9 +134,9 @@ const structuredData = {
                   <span class="font-semibold text-gray-900">Status: {meta.status === 'open' ? 'Open for Claims' : 'In Progress'}</span>
                 </div>
                 
-                {meta.claimUrl && (
+             {meta.claimUrl && (
                   
-                    href={meta.claimUrl}
+                   <a href={meta.claimUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="block w-full text-center px-5 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors mb-4"
