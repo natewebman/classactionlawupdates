@@ -7,7 +7,6 @@ import ClaimDetailsSidebar from '../../components/ClaimDetailsSidebar.astro';
 import RelatedArticles from '../../components/RelatedArticles.astro';
 import { getArticleBySlug } from '../../lib/supabase';
 import { siteConfig } from '../../site.config';
-
 import { marked } from 'marked';
 
 const { slug } = Astro.params;
@@ -27,7 +26,6 @@ const publishDate = article.published_at
 
 const displayCategory = article.category ?? 'Settlement';
 
-// Settlement metadata - extend your Article type or add these fields to Supabase
 const meta = {
   status: (article as any).case_status ?? 'filed',
   claimDeadline: (article as any).claim_deadline ?? null,
@@ -46,7 +44,6 @@ const meta = {
 const hasSidebarData = meta.claimDeadline || meta.claimUrl || meta.potentialReward || 
                        meta.totalAmount || meta.settlementWebsite;
 
-// SEO structured data
 const structuredData = {
   "@context": "https://schema.org",
   "@type": "Article",
@@ -70,14 +67,12 @@ const structuredData = {
   <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
 
   <article class="bg-gray-50 min-h-screen">
-    <!-- Hero Header -->
     <header class="bg-gradient-to-br from-navy-700 via-navy-800 to-navy-900 relative overflow-hidden">
       <div class="absolute inset-0 opacity-10">
         <div class="absolute inset-0" style="background-image: url('data:image/svg+xml,%3Csvg width=&quot;60&quot; height=&quot;60&quot; viewBox=&quot;0 0 60 60&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;%3E%3Cg fill=&quot;none&quot; fill-rule=&quot;evenodd&quot;%3E%3Cg fill=&quot;%23ffffff&quot; fill-opacity=&quot;0.4&quot;%3E%3Cpath d=&quot;M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z&quot;/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
       </div>
       
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 relative">
-        <!-- Breadcrumb -->
         <nav class="mb-4">
           <ol class="flex items-center gap-2 text-sm text-white/60">
             <li><a href="/" class="hover:text-white transition-colors">Home</a></li>
@@ -88,7 +83,6 @@ const structuredData = {
           </ol>
         </nav>
 
-        <!-- Category & Date -->
         <div class="flex flex-wrap items-center gap-3 mb-4">
           <a 
             href={`/category/${displayCategory.toLowerCase().replace(/\s+/g, '-')}`}
@@ -101,32 +95,26 @@ const structuredData = {
           )}
         </div>
 
-        <!-- Title -->
         <h1 class="text-3xl sm:text-4xl lg:text-5xl font-heading font-black text-white leading-tight max-w-4xl">
           {article.title}
         </h1>
 
-        <!-- Subtitle -->
         {article.meta_description && (
           <p class="text-lg lg:text-xl text-white/80 mt-4 leading-relaxed max-w-3xl">
             {article.meta_description}
           </p>
         )}
 
-        <!-- Case Status Tracker -->
         <div class="mt-8 bg-white/10 backdrop-blur-sm rounded-xl p-4 lg:p-6">
           <CaseStatusTracker status={meta.status} />
         </div>
       </div>
     </header>
 
-    <!-- Main Content Area -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
       <div class="lg:grid lg:grid-cols-12 lg:gap-10">
         
-        <!-- Main Content Column -->
         <main class="lg:col-span-8">
-          <!-- Hero Image -->
           {meta.heroImage && (
             <figure class="mb-8 -mt-4 lg:-mt-8">
               <img 
@@ -138,7 +126,6 @@ const structuredData = {
             </figure>
           )}
 
-          <!-- Mobile: Claim Details Card -->
           <div class="lg:hidden mb-8">
             {hasSidebarData && (
               <div class="bg-white rounded-xl shadow-lg border border-gray-100 p-5">
@@ -147,7 +134,7 @@ const structuredData = {
                   <span class="font-semibold text-gray-900">Status: {meta.status === 'open' ? 'Open for Claims' : 'In Progress'}</span>
                 </div>
                 
-            {meta.claimUrl && (
+                {meta.claimUrl && (
                   
                     href={meta.claimUrl}
                     target="_blank"
@@ -182,16 +169,14 @@ const structuredData = {
             )}
           </div>
 
-          <!-- Article Body -->
           <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8 lg:p-10">
             {article.content ? (
-<div class="prose-article text-lg" set:html={marked.parse(article.content)} />
+              <div class="prose-article text-lg" set:html={marked.parse(article.content)} />
             ) : (
               <p class="text-gray-400 italic">Article content is being prepared. Check back soon.</p>
             )}
           </div>
 
-          <!-- Share & Back -->
           <div class="mt-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <a href="/settlements" class="inline-flex items-center gap-2 text-navy-600 font-semibold hover:text-navy-800 transition-colors">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -202,8 +187,7 @@ const structuredData = {
             
             <div class="flex items-center gap-3">
               <span class="text-sm text-gray-500">Share:</span>
-              
-               <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(`https://${siteConfig.domain}/settlements/${slug}`)}`}
+              <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(`https://${siteConfig.domain}/settlements/${slug}`)}`}
                 target="_blank"
                 rel="noopener"
                 class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-navy-600 hover:text-white transition-colors"
@@ -211,7 +195,6 @@ const structuredData = {
               >
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
               </a>
-              
               <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`https://${siteConfig.domain}/settlements/${slug}`)}`}
                 target="_blank"
                 rel="noopener"
@@ -220,8 +203,7 @@ const structuredData = {
               >
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
               </a>
-              
-               <a href={`https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(`https://${siteConfig.domain}/settlements/${slug}`)}&title=${encodeURIComponent(article.title)}`}
+              <a href={`https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(`https://${siteConfig.domain}/settlements/${slug}`)}&title=${encodeURIComponent(article.title)}`}
                 target="_blank"
                 rel="noopener"
                 class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-navy-600 hover:text-white transition-colors"
@@ -232,11 +214,9 @@ const structuredData = {
             </div>
           </div>
 
-          <!-- Related Articles -->
           <RelatedArticles currentSlug={slug!} category={displayCategory} />
         </main>
 
-        <!-- Desktop Sidebar -->
         <aside class="hidden lg:block lg:col-span-4">
           <ClaimDetailsSidebar
             status={meta.status === 'open' ? 'Open for Claims' : 'In Progress'}
