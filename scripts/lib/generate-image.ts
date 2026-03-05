@@ -1,13 +1,14 @@
 /**
  * AI image generation pipeline for article hero images.
  *
- * 1. Claude generates a detailed image prompt from article metadata.
- * 2. Claude (Sonnet) generates the image natively.
- * 3. The base64 image is uploaded to Supabase Storage.
+ * 1. Claude Haiku generates a detailed image prompt from article metadata.
+ * 2. OpenAI DALL-E 3 generates the image.
+ * 3. The image is downloaded and uploaded to Supabase Storage.
  * 4. The article record is updated with the public URL, alt text, and filename.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 
 // ---------------------------------------------------------------------------
@@ -62,43 +63,30 @@ Respond with ONLY the image prompt, nothing else.`,
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 – Generate the image via Claude (native image generation)
+// Step 2 – Generate the image via OpenAI DALL-E 3
 // ---------------------------------------------------------------------------
-
-const IMAGE_MODEL = "claude-sonnet-4-5";
 
 export async function generateImage(
   prompt: string
 ): Promise<{ data: Buffer; mediaType: string }> {
-  const anthropic = new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
+  const openai = new OpenAI({ apiKey: requireEnv("OPENAI_API_KEY") });
 
-  const message = await anthropic.messages.create({
-    model: IMAGE_MODEL,
-    max_tokens: 16000,
-    messages: [
-      {
-        role: "user",
-        content: `Generate a photojournalistic editorial hero image for a legal news article. The image should be landscape orientation (16:9 aspect ratio), high quality, and visually compelling.
-
-${prompt}
-
-Generate the image now.`,
-      },
-    ],
+  const response = await openai.images.generate({
+    model: "dall-e-3",
+    prompt: `Photojournalistic editorial hero image for a legal news article. NO text, NO logos, NO watermarks, NO identifiable human faces. ${prompt}`,
+    n: 1,
+    size: "1792x1024", // Landscape, closest to 16:9
+    quality: "standard",
+    response_format: "b64_json",
   });
 
-  // Find the image block in the response
-  const imageBlock = message.content.find(
-    (block): block is Anthropic.ImageBlock => block.type === "image"
-  );
-
-  if (!imageBlock) {
-    throw new Error("Claude did not return an image");
+  const imageData = response.data[0];
+  if (!imageData?.b64_json) {
+    throw new Error("OpenAI did not return an image");
   }
 
-  const source = imageBlock.source as { type: string; data: string; media_type: string };
-  const buffer = Buffer.from(source.data, "base64");
-  return { data: buffer, mediaType: source.media_type };
+  const buffer = Buffer.from(imageData.b64_json, "base64");
+  return { data: buffer, mediaType: "image/png" };
 }
 
 // ---------------------------------------------------------------------------
@@ -181,12 +169,11 @@ export async function generateArticleImage(article: {
   // Step 1: Generate prompt with Claude Haiku
   const prompt = await generateImagePrompt(article);
 
-  // Step 2: Generate image with Claude Sonnet
+  // Step 2: Generate image with OpenAI DALL-E 3
   const { data: imageData, mediaType } = await generateImage(prompt);
 
-  // Derive filename extension from media type
-  const ext = mediaType === "image/webp" ? "webp" : "png";
-  const filename = `${article.slug}.${ext}`;
+  // Filename is always .png with DALL-E 3
+  const filename = `${article.slug}.png`;
 
   // Step 3: Persist to Supabase Storage
   const imageUrl = await persistImage(imageData, filename, mediaType);

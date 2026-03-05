@@ -1,19 +1,22 @@
-STEP 1: Search for recent class action lawsuits in the "{{category}}" category.
-- Search for terms like "{{category}} class action lawsuit 2025" or "{{category}} class action settlement 2025"
-- Look for cases with recent activity (filings, settlements, rulings)
+Use the research context below to write an article about a real class action lawsuit in the "{{category}}" category.
 
-STEP 2: Pick ONE specific lawsuit from your search results.
-- Choose a case that has concrete details available (court name, parties, dates, amounts)
-- This is article {{article_number}} of {{total_articles}} — pick a case that readers may not have seen widely covered
+RESEARCH CONTEXT:
+{{research_context}}
 
-STEP 3: Write the article about ONLY that one lawsuit.
-- Every detail in your article must come from your search results
-- The title must match the content — both about the same case
-- Include specific details: court names, company names, settlement amounts, filing dates
-- Explain what the lawsuit alleges and why it matters to everyday consumers
-- Include a section on what affected consumers should do (without giving legal advice)
-- Content must be at least 800 words
-- Use proper HTML formatting in the content field
+INSTRUCTIONS:
+1. Pick ONE specific lawsuit from the research context above.
+   - Choose a case that has concrete details available (court name, parties, dates, amounts)
+   - This is article {{article_number}} of {{total_articles}} — pick a case that readers may not have seen widely covered
+
+2. Write the article about ONLY that one lawsuit.
+   - Every detail in your article must come from the research context
+   - If the research context does not include a fact, do not invent it
+   - The title must match the content — both about the same case
+   - Include specific details: court names, company names, settlement amounts, filing dates
+   - Explain what the lawsuit alleges and why it matters to everyday consumers
+   - Include a section on what affected consumers should do (without giving legal advice)
+   - Content must be at least 800 words
+   - Use proper HTML formatting in the content field
 
 CRITICAL: Do not mix details from different lawsuits. One case per article.
 

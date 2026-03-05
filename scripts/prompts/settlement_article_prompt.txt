@@ -1,16 +1,18 @@
-STEP 1: Search for OPEN class action settlements in the "{{category}}" category.
-- Search for terms like "{{category}} class action settlement claim" or "{{category}} settlement deadline 2025 2026"
-- Look for settlements where people can STILL file claims (not expired)
-- Prioritize settlements with clear deadlines and claim processes
+Use the research context below to write an article about a real class action settlement in the "{{category}}" category.
 
-STEP 2: Pick ONE specific settlement from your search results.
-- Choose a settlement that has concrete details: claim deadline, settlement amount, eligibility criteria
-- This is article {{article_number}} of {{total_articles}} — pick a settlement that readers can actually act on
-- MUST be a settlement where the claim deadline has NOT passed
+RESEARCH CONTEXT:
+{{research_context}}
 
-STEP 3: Write the article about ONLY that one settlement.
-- Every detail must come from your search results
-- The title must match the content — both about the same settlement
+INSTRUCTIONS:
+1. Pick ONE specific settlement from the research context above.
+   - Choose a settlement that has concrete details: claim deadline, settlement amount, eligibility criteria
+   - This is article {{article_number}} of {{total_articles}} — pick a settlement that readers can actually act on
+   - MUST be a settlement where the claim deadline has NOT passed
+
+2. Write the article about ONLY that one settlement.
+   - Every detail must come from the research context
+   - If the research context does not include a fact, do not invent it
+   - The title must match the content — both about the same settlement
 
 REQUIRED SECTIONS in your article:
 1. **What Happened** — Brief background on the lawsuit and what the company allegedly did
