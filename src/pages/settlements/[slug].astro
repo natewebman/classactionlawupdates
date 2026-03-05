@@ -8,6 +8,8 @@ import RelatedArticles from '../../components/RelatedArticles.astro';
 import { getArticleBySlug } from '../../lib/supabase';
 import { siteConfig } from '../../site.config';
 
+import { marked } from 'marked';
+
 const { slug } = Astro.params;
 const article = await getArticleBySlug(slug!);
 
@@ -183,7 +185,7 @@ const structuredData = {
           <!-- Article Body -->
           <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8 lg:p-10">
             {article.content ? (
-              <div class="prose-article text-lg" set:html={article.content} />
+<div class="prose-article text-lg" set:html={marked.parse(article.content)} />
             ) : (
               <p class="text-gray-400 italic">Article content is being prepared. Check back soon.</p>
             )}
