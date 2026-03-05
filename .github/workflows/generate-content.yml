@@ -70,3 +70,23 @@ jobs:
           ADMIN_SUPABASE_URL: ${{ secrets.ADMIN_SUPABASE_URL }}
           ADMIN_SUPABASE_KEY: ${{ secrets.ADMIN_SUPABASE_KEY }}
         run: python scripts/review_pipeline.py
+
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: review
+    if: always() && needs.review.result != 'cancelled'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate hero images for new articles
+        env:
+          PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PUBLIC_SITE_KEY: classactionlawupdates
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npx tsx scripts/generate-missing-images.ts
