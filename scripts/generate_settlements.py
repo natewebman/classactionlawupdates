@@ -188,6 +188,15 @@ def write_site_article(supabase_client, article_id: str, article_data: dict, cat
     base_slug = article_data.get("slug") or slugify(article_data.get("title", "untitled"))
     unique_slug = f"{base_slug}-{article_id[:8]}" if not base_slug.endswith(article_id[:8]) else base_slug
 
+    # Handle proof_required — DB expects boolean, Claude may return string
+    proof_required_raw = article_data.get("proof_required")
+    if isinstance(proof_required_raw, bool):
+        proof_required = proof_required_raw
+    elif isinstance(proof_required_raw, str):
+        proof_required = "no proof" not in proof_required_raw.lower()
+    else:
+        proof_required = None
+
     row = {
         "id": article_id,
         "site_id": site_id,
@@ -196,10 +205,9 @@ def write_site_article(supabase_client, article_id: str, article_data: dict, cat
         "content": article_data.get("content", ""),
         "meta_description": article_data.get("meta_description", ""),
         "category": article_data.get("category", category),
-        "news_type": "settlement",  # Always settlement for this generator
+        "news_type": "settlement",
         "content_stage": "draft",
         "published_at": datetime.now(timezone.utc).isoformat(),
-        # Settlement-specific fields
         "case_name": article_data.get("case_name"),
         "case_status": article_data.get("case_status", "filed"),
         "settlement_amount": article_data.get("settlement_amount"),
@@ -208,14 +216,12 @@ def write_site_article(supabase_client, article_id: str, article_data: dict, cat
         "settlement_website": article_data.get("settlement_website"),
         "claims_administrator": article_data.get("claims_administrator"),
         "class_counsel": article_data.get("class_counsel"),
-        "proof_required": article_data.get("proof_required"),
+        "proof_required": proof_required,
         "potential_reward": article_data.get("potential_reward"),
         "location": article_data.get("location"),
     }
 
-    # Remove None values to avoid overwriting with nulls
     row = {k: v for k, v in row.items() if v is not None}
-
     result = supabase_client.table("articles").insert(row).execute()
     return result
 
