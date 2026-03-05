@@ -1,0 +1,82 @@
+name: Generate Settlements
+
+on:
+  workflow_dispatch:
+    inputs:
+      articles_count:
+        description: 'Number of settlement articles to generate'
+        required: false
+        default: '3'
+      model:
+        description: 'Claude model to use'
+        required: false
+        default: 'claude-sonnet-4-5-20250929'
+      categories:
+        description: 'Comma-separated categories (leave empty for random)'
+        required: false
+        default: ''
+      topic_url:
+        description: 'Optional: URL of a specific settlement to write about'
+        required: false
+        default: ''
+      topic_idea:
+        description: 'Optional: Specific settlement topic or case name'
+        required: false
+        default: ''
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install anthropic supabase
+
+      - name: Generate settlement content
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          ADMIN_SUPABASE_URL: ${{ secrets.ADMIN_SUPABASE_URL }}
+          ADMIN_SUPABASE_KEY: ${{ secrets.ADMIN_SUPABASE_KEY }}
+          ARTICLES_COUNT: ${{ github.event.inputs.articles_count }}
+          MODEL: ${{ github.event.inputs.model }}
+          CATEGORIES: ${{ github.event.inputs.categories }}
+          TOPIC_URL: ${{ github.event.inputs.topic_url }}
+          TOPIC_IDEA: ${{ github.event.inputs.topic_idea }}
+          ADMIN_RUN_ID: ${{ github.event.inputs.admin_run_id }}
+        run: python scripts/generate_settlements.py
+
+  review:
+    needs: generate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install anthropic supabase requests
+
+      - name: Review and publish content
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          ADMIN_SUPABASE_URL: ${{ secrets.ADMIN_SUPABASE_URL }}
+          ADMIN_SUPABASE_KEY: ${{ secrets.ADMIN_SUPABASE_KEY }}
+        run: python scripts/review_pipeline.py
