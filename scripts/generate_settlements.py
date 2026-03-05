@@ -22,6 +22,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 import anthropic
+import requests
 from supabase import create_client
 
 
@@ -30,10 +31,17 @@ from supabase import create_client
 # =============================================================================
 
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+PERPLEXITY_API_KEY = os.environ["PERPLEXITY_API_KEY"]
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 ADMIN_SUPABASE_URL = os.environ.get("ADMIN_SUPABASE_URL", "")
 ADMIN_SUPABASE_KEY = os.environ.get("ADMIN_SUPABASE_KEY", "")
+
+PERPLEXITY_MODEL = "sonar"
+PERPLEXITY_HEADERS = {
+    "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+    "Content-Type": "application/json",
+}
 
 ARTICLES_COUNT = int(os.environ.get("ARTICLES_COUNT", "3"))
 
@@ -130,7 +138,89 @@ def get_admin_db():
 
 
 # =============================================================================
-# CLAUDE API WITH WEB SEARCH
+# PERPLEXITY RESEARCH
+# =============================================================================
+
+def ask_perplexity(messages: list, max_tokens: int = 1024) -> str:
+    """Send a message list to Perplexity and return the text response."""
+    payload = {
+        "model": PERPLEXITY_MODEL,
+        "messages": messages,
+        "max_tokens": max_tokens,
+    }
+    resp = requests.post(
+        "https://api.perplexity.ai/chat/completions",
+        headers=PERPLEXITY_HEADERS,
+        json=payload,
+        timeout=60,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
+def research_settlement(category: str, topic_url: str = "", topic_idea: str = "") -> str:
+    """Use Perplexity to research real settlements. Returns structured research."""
+    if topic_url:
+        user_content = (
+            f"Research the class action settlement found at this URL: {topic_url}\n\n"
+            "Return structured information including:\n"
+            "- Official case name\n"
+            "- Settlement amount\n"
+            "- Claim deadline\n"
+            "- Who qualifies\n"
+            "- How to file a claim (claim URL if available)\n"
+            "- Claims administrator\n"
+            "- Current status\n"
+            "- Source URLs\n\n"
+            "Limit response to 300-500 words. Use bullet points."
+        )
+    elif topic_idea:
+        user_content = (
+            f'Research this specific class action settlement or lawsuit: "{topic_idea}"\n\n'
+            "Return structured information including:\n"
+            "- Official case name and case number\n"
+            "- Defendants/companies involved\n"
+            "- Settlement amount (if known)\n"
+            "- Claim deadline\n"
+            "- Who qualifies\n"
+            "- How to file a claim (claim URL if available)\n"
+            "- Current litigation status\n"
+            "- Source URLs\n\n"
+            "Limit response to 300-500 words. Use bullet points."
+        )
+    else:
+        user_content = (
+            f'Research real, current class action settlements related to "{category}" '
+            "where consumers can still file claims.\n\n"
+            "Return structured information including:\n"
+            "- Specific settlement/case names\n"
+            "- Defendants/companies involved\n"
+            "- Settlement amounts\n"
+            "- Claim deadlines (must be in the future)\n"
+            "- Who qualifies to claim\n"
+            "- Claim URLs or settlement websites\n"
+            "- Claims administrator\n"
+            "- Source URLs\n\n"
+            "Focus on settlements where the claim deadline has NOT passed.\n"
+            "Limit response to 300-500 words. Use bullet points."
+        )
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a legal research assistant specializing in class action settlements. "
+                "Search the web for real, current settlement information. "
+                "Return only verified facts with sources."
+            ),
+        },
+        {"role": "user", "content": user_content},
+    ]
+    return ask_perplexity(messages, max_tokens=1024)
+
+
+# =============================================================================
+# CLAUDE API (NO WEB SEARCH — uses Perplexity research context)
 # =============================================================================
 
 def generate_settlement(client: anthropic.Anthropic, system_prompt: str, article_prompt: str) -> dict:
@@ -142,13 +232,6 @@ def generate_settlement(client: anthropic.Anthropic, system_prompt: str, article
                 max_tokens=8192,
                 system=system_prompt,
                 messages=[{"role": "user", "content": article_prompt}],
-                tools=[
-                    {
-                        "type": "web_search_20250305",
-                        "name": "web_search",
-                        "max_uses": 5,
-                    }
-                ],
             )
             break
         except anthropic.APIStatusError as e:
@@ -326,7 +409,7 @@ def main():
     print(f"Articles: {ARTICLES_COUNT}")
     print(f"Mode: {GENERATION_MODE}")
     print(f"Prompt Version: {PROMPT_VERSION}")
-    print(f"Web Search: ENABLED")
+    print(f"Research: Perplexity ({PERPLEXITY_MODEL})")
     if TOPIC_URL:
         print(f"Topic URL: {TOPIC_URL}")
     if TOPIC_IDEA:
@@ -382,22 +465,22 @@ def main():
         print(f"\n── Settlement {i + 1}/{ARTICLES_COUNT} ──")
         print(f"  UUID:     {article_id}")
         print(f"  Category: {category}")
-        print(f"  🔍 Searching for real settlements...")
+        print(f"  🔍 Researching via Perplexity...")
 
         try:
-            # Build the article-specific prompt
+            # Step 1: Research real settlements via Perplexity
+            research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA)
+            print(f"  ✓ Research complete ({len(research_context)} chars)")
+
+            # Step 2: Build prompt with research context injected
             article_prompt = article_prompt_template.replace("{{category}}", category)
             article_prompt = article_prompt.replace("{{article_number}}", str(i + 1))
             article_prompt = article_prompt.replace("{{total_articles}}", str(ARTICLES_COUNT))
-            
-            # Add guided content if provided
-            if TOPIC_URL:
-                article_prompt += f"\n\nIMPORTANT: Base this article on the settlement found at: {TOPIC_URL}"
-            if TOPIC_IDEA:
-                article_prompt += f"\n\nIMPORTANT: Focus on this specific topic/case: {TOPIC_IDEA}"
+            article_prompt = article_prompt.replace("{{research_context}}", research_context)
 
             article_prompt_hash = sha256_short(article_prompt)
 
+            # Step 3: Generate settlement article with Claude (no web search)
             result = generate_settlement(claude, system_prompt, article_prompt)
             article_data = result["article"]
             input_tokens = result["input_tokens"]
@@ -439,7 +522,7 @@ def main():
                     "model_used": MODEL,
                     "temperature": None,
                     "top_p": None,
-                    "generation_params": {"web_search": True, "content_type": "settlement"},
+                    "generation_params": {"research": "perplexity", "content_type": "settlement"},
                     "status": "published",
                     "word_count": word_count,
                     "input_tokens": input_tokens,

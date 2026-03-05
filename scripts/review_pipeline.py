@@ -228,24 +228,56 @@ def human_rewrite(claude_client: anthropic.Anthropic, article: dict) -> str:
 
 
 # =============================================================================
-# REGENERATE (called when fact check fails) - NOW WITH WEB SEARCH
+# REGENERATE (called when fact check fails) — Perplexity research + Haiku
 # =============================================================================
+
+REGEN_MODEL = "claude-haiku-4-5-20251001"  # Cheap model for regeneration drafts
 
 def regenerate(claude_client: anthropic.Anthropic, article: dict) -> str:
     """
     Regenerate content for an article that failed fact-checking.
-    Uses web search to find a REAL lawsuit in the same category.
+    Uses Perplexity to research a REAL lawsuit, then Haiku to write it.
     Returns the new article content.
     """
     category = article.get('category', 'consumer protection')
-    
+
+    # Step 1: Research real lawsuits via Perplexity
+    research_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a legal research assistant. Search the web for real, current information "
+                "about class action lawsuits. Return only verified facts with sources."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f'Research real, current class action lawsuits or mass tort litigation related to "{category}".\n\n'
+                "Return structured information including:\n"
+                "- Specific lawsuit names and case numbers\n"
+                "- Defendants/companies involved\n"
+                "- Settlement amounts (if known)\n"
+                "- MDL numbers (if applicable)\n"
+                "- Current litigation status\n"
+                "- Recent developments (last 24 months)\n"
+                "- Source URLs\n\n"
+                "Focus on lawsuits that are active or recently settled.\n"
+                "Limit response to 300-500 words. Use bullet points."
+            ),
+        },
+    ]
+    research_context = ask_perplexity(research_messages, max_tokens=1024)
+
+    # Step 2: Generate new article with Haiku using research context
     response = claude_client.messages.create(
-        model=REWRITE_MODEL,
+        model=REGEN_MODEL,
         max_tokens=8192,
         system=(
             "You are a legal content writer for ClassActionLawUpdates.com. "
-            "You have web search enabled. ALWAYS search for real, current class action lawsuits before writing. "
-            "Only write about lawsuits you found in your search results. Never invent case details. "
+            "You will be given research context about real lawsuits. "
+            "Only write about lawsuits described in the research context. Never invent case details. "
+            "If the research context does not include a fact, do not invent it. "
             "Return ONLY the article content in HTML format using <h2>, <h3>, <p>, <ul>, <li> tags. "
             "Do not include any preamble, explanation, or JSON wrapper — just the article HTML content."
         ),
@@ -255,30 +287,22 @@ def regenerate(claude_client: anthropic.Anthropic, article: dict) -> str:
                 "content": (
                     f"The previous article titled '{article['title']}' failed fact-checking because it contained "
                     f"inaccurate or hallucinated information.\n\n"
-                    f"STEP 1: Search the web for real class action lawsuits in the '{category}' category. "
-                    f"Use search terms like '{category} class action lawsuit 2025' or '{category} class action settlement'.\n\n"
-                    f"STEP 2: Pick ONE real, well-documented lawsuit from your search results.\n\n"
-                    f"STEP 3: Write a new article (minimum 800 words) about that specific lawsuit. "
-                    f"Include real case names, real defendant companies, real court names, and accurate details from your search.\n\n"
+                    f"RESEARCH CONTEXT:\n{research_context}\n\n"
+                    f"Using ONLY the research above, pick ONE real, well-documented lawsuit and write a new "
+                    f"article (minimum 800 words) about that specific lawsuit. "
+                    f"Include real case names, real defendant companies, real court names, and accurate details "
+                    f"from the research context.\n\n"
                     f"Return ONLY the article content in HTML format. No preamble, no JSON."
                 ),
             }
         ],
-        tools=[
-            {
-                "type": "web_search_20250305",
-                "name": "web_search",
-                "max_uses": 5,
-            }
-        ],
     )
-    
-    # Extract text content from response (skip tool use blocks)
+
     raw_text = ""
     for block in response.content:
         if block.type == "text":
             raw_text += block.text
-    
+
     return raw_text.strip()
 
 

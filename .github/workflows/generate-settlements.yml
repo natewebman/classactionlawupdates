@@ -38,11 +38,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install anthropic supabase
+          pip install anthropic supabase requests
 
       - name: Generate settlement content
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           ADMIN_SUPABASE_URL: ${{ secrets.ADMIN_SUPABASE_URL }}
