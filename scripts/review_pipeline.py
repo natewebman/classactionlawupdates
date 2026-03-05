@@ -40,7 +40,7 @@ SUPABASE_KEY        = os.environ["SUPABASE_KEY"]
 ADMIN_SUPABASE_URL  = os.environ.get("ADMIN_SUPABASE_URL", "")
 ADMIN_SUPABASE_KEY  = os.environ.get("ADMIN_SUPABASE_KEY", "")
 
-REWRITE_MODEL          = "claude-sonnet-4-6"   # Best model for human rewrite
+REWRITE_MODEL          = "claude-sonnet-4-5-20250929"   # Best model for human rewrite
 PERPLEXITY_MODEL       = "sonar"               # Free tier model
 MAX_REGEN_ATTEMPTS     = 2                     # Max times to regenerate a failing article
 

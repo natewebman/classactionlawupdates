@@ -59,7 +59,7 @@ MODEL_ALIASES = {
     "claude opus 4.5": "claude-opus-4-5-20250918",
 }
 
-_raw_model = os.environ.get("MODEL", "claude-sonnet-4-5-20250929")
+_raw_model = os.environ.get("MODEL", "claude-haiku-4-5-20251001")
 MODEL = MODEL_ALIASES.get(_raw_model.lower().strip(), _raw_model)
 
 GENERATION_MODE = os.environ.get("GENERATION_MODE", "standard")
