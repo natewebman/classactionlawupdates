@@ -7,7 +7,7 @@
  *
  * Required env vars (in .env):
  *   PUBLIC_SUPABASE_URL, PUBLIC_SITE_KEY,
- *   SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY
+ *   SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY
  */
 
 import "dotenv/config";
@@ -23,6 +23,7 @@ const REQUIRED_VARS = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "PUBLIC_SITE_KEY",
   "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
 ];
 
 for (const key of REQUIRED_VARS) {
