@@ -36,7 +36,7 @@ ADMIN_SUPABASE_URL = os.environ.get("ADMIN_SUPABASE_URL", "")
 ADMIN_SUPABASE_KEY = os.environ.get("ADMIN_SUPABASE_KEY", "")
 
 ARTICLES_COUNT = int(os.environ.get("ARTICLES_COUNT", "3"))
-MODEL = os.environ.get("MODEL", "claude-sonnet-4-5-20250929")
+MODEL = os.environ.get("MODEL", "claude-haiku-4-5-20251001")
 GENERATION_MODE = os.environ.get("GENERATION_MODE", "standard")
 CATEGORIES = os.environ.get("CATEGORIES", "")
 ADMIN_RUN_ID = os.environ.get("ADMIN_RUN_ID", "")
