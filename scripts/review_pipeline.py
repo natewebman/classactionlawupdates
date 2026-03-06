@@ -395,14 +395,15 @@ def process_article(article: dict, site_db, admin_db, claude_client: anthropic.A
                 "claim_url", "settlement_website", "claims_administrator",
                 "class_counsel", "potential_reward", "location",
             }
+            old_title = article.get("title", "")
             updates = {"content_stage": "draft", "content": new_content}
             for field in ALLOWED_DB_FIELDS:
                 if regen_result.get(field):
                     updates[field] = regen_result[field]
                     article[field] = regen_result[field]
 
-            if "title" in updates and updates["title"] != article.get("title"):
-                print(f"   ↳ New title: {updates.get('title', '')[:70]}")
+            if "title" in updates and updates["title"] != old_title:
+                print(f"   ↳ New title: {updates['title'][:70]}")
 
             site_db.table("articles").update(updates).eq("id", article_id).execute()
             print(f"   ↳ Site DB: content_stage = 'draft'")
