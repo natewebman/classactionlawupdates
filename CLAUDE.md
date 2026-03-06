@@ -111,13 +111,14 @@ Settlement detail pages link to: category hub, brand page, state page, open sett
 
 ## Content Pipeline
 
-Runs via GitHub Actions, not n8n. Two workflows:
+Runs via GitHub Actions. Single unified workflow:
 
-- **Generate Content** (`generate-content.yml`) — general news, daily at 12:00 UTC + manual
-- **Generate Settlements** (`generate-settlements.yml`) — settlement articles, manual only
+- **Generate Articles** (`generate-articles.yml`) — generates news + settlement articles, daily at 12:00 UTC + manual
 
-Both run a 3-job pipeline:
-1. **generate** — Perplexity researches → Claude Haiku drafts article
+The `CONTENT_TYPE` input controls what gets generated: `mixed` (default, roughly half news/half settlements), `news`, or `settlement`. Categories are auto-balanced to keep hub pages even.
+
+3-job pipeline:
+1. **generate** — Perplexity researches → Claude Haiku drafts article (`scripts/generate_articles.py`)
 2. **review** — fact-check → fact-update → human-tone rewrite (Claude Sonnet)
 3. **images** — Claude Haiku writes prompt → DALL-E 3 generates hero image → Cloudflare Pages rebuild via deploy hook
 

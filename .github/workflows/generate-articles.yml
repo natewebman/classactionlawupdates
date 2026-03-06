@@ -1,46 +1,49 @@
-name: Generate Settlements
-
+name: Generate Articles
 on:
   workflow_dispatch:
     inputs:
       articles_count:
-        description: 'Number of settlement articles to generate'
-        required: false
-        default: '3'
+        description: 'Number of articles to generate'
+        default: '2'
       model:
         description: 'Claude model to use'
-        required: false
         default: 'claude-haiku-4-5-20251001'
+      generation_mode:
+        description: 'batch (50% off) or standard (real-time)'
+        default: 'standard'
+      content_type:
+        description: 'Content type: mixed, news, or settlement'
+        default: 'mixed'
       categories:
-        description: 'Comma-separated categories (leave empty for random)'
-        required: false
+        description: 'Comma-separated categories (empty = balanced auto-select)'
         default: ''
       topic_url:
         description: 'Optional: URL of a specific settlement to write about'
-        required: false
         default: ''
       topic_idea:
         description: 'Optional: Specific settlement topic or case name'
-        required: false
         default: ''
+      admin_run_id:
+        description: 'UUID from admin DB generation_runs'
+        default: ''
+      prompt_version:
+        description: 'Prompt version label'
+        default: 'v1'
+  schedule:
+    - cron: '0 12 * * *'
 
 jobs:
   generate:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install dependencies
-        run: |
-          pip install anthropic supabase requests
-
-      - name: Generate settlement content
+        run: pip install anthropic supabase requests
+      - name: Generate Articles
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
@@ -48,31 +51,30 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           ADMIN_SUPABASE_URL: ${{ secrets.ADMIN_SUPABASE_URL }}
           ADMIN_SUPABASE_KEY: ${{ secrets.ADMIN_SUPABASE_KEY }}
-          ARTICLES_COUNT: ${{ github.event.inputs.articles_count }}
-          MODEL: ${{ github.event.inputs.model }}
-          CATEGORIES: ${{ github.event.inputs.categories }}
-          TOPIC_URL: ${{ github.event.inputs.topic_url }}
-          TOPIC_IDEA: ${{ github.event.inputs.topic_idea }}
-          ADMIN_RUN_ID: ${{ github.event.inputs.admin_run_id }}
-        run: python scripts/generate_settlements.py
+          ARTICLES_COUNT: ${{ inputs.articles_count || '2' }}
+          MODEL: ${{ inputs.model || 'claude-haiku-4-5-20251001' }}
+          GENERATION_MODE: ${{ inputs.generation_mode || 'standard' }}
+          CONTENT_TYPE: ${{ inputs.content_type || 'mixed' }}
+          CATEGORIES: ${{ inputs.categories || '' }}
+          TOPIC_URL: ${{ inputs.topic_url || '' }}
+          TOPIC_IDEA: ${{ inputs.topic_idea || '' }}
+          ADMIN_RUN_ID: ${{ inputs.admin_run_id || '' }}
+          PROMPT_VERSION: ${{ inputs.prompt_version || 'v1' }}
+        run: python scripts/generate_articles.py
 
   review:
-    needs: generate
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: generate
+    if: always()
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install dependencies
-        run: |
-          pip install anthropic supabase requests
-
-      - name: Review and publish content
+        run: pip install anthropic supabase requests
+      - name: Run Review Pipeline
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
@@ -88,10 +90,8 @@ jobs:
     needs: review
     if: always() && needs.review.result != 'cancelled'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
       - name: Install dependencies

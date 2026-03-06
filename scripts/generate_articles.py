@@ -1,13 +1,26 @@
 """
-generate_settlements.py — Settlement Content Generator for classactionlawupdates
-==================================================================================
-Called by GitHub Actions workflow or admin panel to generate settlement articles.
+generate_articles.py — Unified Content Generation for classactionlawupdates
+============================================================================
+Replaces both generate_content.py and generate_settlements.py.
 
-Differences from generate_content.py:
-  - Focuses on actionable settlement info (how to claim, deadlines, amounts)
-  - Extracts structured fields (claim_deadline, settlement_amount, claim_url, etc.)
-  - Accepts optional TOPIC_URL or TOPIC_IDEA for guided content generation
-  - Always sets news_type = 'settlement'
+Generates news articles AND/OR settlement articles in a single run based on
+the CONTENT_TYPE env var:
+  - "mixed"      (default) — generates a mix of news and settlement articles
+  - "news"       — only news articles (same as old generate_content.py)
+  - "settlement" — only settlements (same as old generate_settlements.py)
+
+Flow:
+  1. Load config from environment variables (set by workflow inputs)
+  2. Load prompts from scripts/prompts/ directory
+  3. For each article:
+     a. Determine content type (news vs settlement)
+     b. Use appropriate Perplexity research function
+     c. Use appropriate prompt pair
+     d. Call Claude with research context
+     e. Parse structured JSON response
+     f. Write article to SITE Supabase (articles table)
+     g. Write run_article to ADMIN Supabase (run_articles table)
+  4. Update generation_runs in admin DB with totals + completion status
 """
 
 import os
@@ -47,7 +60,7 @@ PERPLEXITY_HEADERS = {
     "Content-Type": "application/json",
 }
 
-ARTICLES_COUNT = int(os.environ.get("ARTICLES_COUNT", "3"))
+ARTICLES_COUNT = int(os.environ.get("ARTICLES_COUNT", "2"))
 
 # Model alias map — allows friendly names from admin panel
 MODEL_ALIASES = {
@@ -73,9 +86,12 @@ CATEGORIES = os.environ.get("CATEGORIES", "")
 ADMIN_RUN_ID = os.environ.get("ADMIN_RUN_ID", "")
 PROMPT_VERSION = os.environ.get("PROMPT_VERSION", "v1")
 
-# Optional: guided content generation
-TOPIC_URL = os.environ.get("TOPIC_URL", "")      # URL to base the article on
-TOPIC_IDEA = os.environ.get("TOPIC_IDEA", "")    # Freeform topic/idea to write about
+# Content type: "mixed", "news", or "settlement"
+CONTENT_TYPE = os.environ.get("CONTENT_TYPE", "mixed").lower().strip()
+
+# Optional: guided content generation (settlement only)
+TOPIC_URL = os.environ.get("TOPIC_URL", "")
+TOPIC_IDEA = os.environ.get("TOPIC_IDEA", "")
 
 DEFAULT_CATEGORIES = [
     "stocks",
@@ -118,18 +134,6 @@ def slugify(title: str, article_id: str = "") -> str:
     return slug
 
 
-def pick_categories(count: int) -> list[str]:
-    if CATEGORIES:
-        cats = [c.strip() for c in CATEGORIES.split(",") if c.strip()]
-    else:
-        cats = DEFAULT_CATEGORIES.copy()
-        random.shuffle(cats)
-    result = []
-    for i in range(count):
-        result.append(cats[i % len(cats)])
-    return result
-
-
 def get_admin_db():
     if not ADMIN_SUPABASE_URL or not ADMIN_SUPABASE_KEY:
         return None
@@ -139,6 +143,94 @@ def get_admin_db():
     except Exception as e:
         print(f"WARNING: Could not connect to admin DB: {e}")
         return None
+
+
+# =============================================================================
+# CATEGORY BALANCING
+# =============================================================================
+
+def pick_categories_balanced(site_db, count: int) -> list[str]:
+    """
+    Pick categories for a batch of articles, preferring under-represented categories.
+    If CATEGORIES env var is set, respect that override and skip balancing.
+    """
+    if CATEGORIES:
+        cats = [c.strip() for c in CATEGORIES.split(",") if c.strip()]
+        result = []
+        for i in range(count):
+            result.append(cats[i % len(cats)])
+        return result
+
+    # Query existing article counts per category
+    category_counts = {cat: 0 for cat in DEFAULT_CATEGORIES}
+    try:
+        for cat in DEFAULT_CATEGORIES:
+            result = site_db.table("articles") \
+                .select("id", count="exact") \
+                .eq("content_stage", "published") \
+                .eq("category", cat) \
+                .execute()
+            category_counts[cat] = result.count if result.count is not None else 0
+        print(f"Category balance: {category_counts}")
+    except Exception as e:
+        print(f"WARNING: Could not query category counts, falling back to random: {e}")
+        cats = DEFAULT_CATEGORIES.copy()
+        random.shuffle(cats)
+        return [cats[i % len(cats)] for i in range(count)]
+
+    # Sort categories by count (ascending = least articles first)
+    sorted_cats = sorted(category_counts.items(), key=lambda x: x[1])
+
+    result = []
+    for i in range(count):
+        # Pick from least-represented categories with a small random jitter
+        # to avoid always picking the exact same order
+        pool_size = min(3, len(sorted_cats))
+        pool = sorted_cats[:pool_size]
+        chosen_cat, chosen_count = random.choice(pool)
+        result.append(chosen_cat)
+        # Update count so the next pick accounts for this one
+        sorted_cats = [(c, cnt + (1 if c == chosen_cat else 0)) for c, cnt in sorted_cats]
+        sorted_cats.sort(key=lambda x: x[1])
+
+    return result
+
+
+# =============================================================================
+# CONTENT TYPE ASSIGNMENT
+# =============================================================================
+
+def assign_content_types(count: int) -> list[str]:
+    """
+    Determine the content type for each article in the batch.
+    Returns a list of "news" or "settlement" strings.
+
+    When TOPIC_URL or TOPIC_IDEA is set, all articles are settlements.
+    """
+    if TOPIC_URL or TOPIC_IDEA:
+        return ["settlement"] * count
+
+    if CONTENT_TYPE == "news":
+        return ["news"] * count
+    elif CONTENT_TYPE == "settlement":
+        return ["settlement"] * count
+    else:
+        # "mixed" — roughly half and half with slight randomization
+        types = []
+        # Start with an even split
+        n_settlements = count // 2
+        n_news = count - n_settlements
+        # Randomly swap one if count >= 2 to avoid always being exactly 50/50
+        if count >= 2 and random.random() < 0.3:
+            if random.random() < 0.5:
+                n_settlements = max(0, n_settlements - 1)
+                n_news = count - n_settlements
+            else:
+                n_settlements = min(count, n_settlements + 1)
+                n_news = count - n_settlements
+        types = ["settlement"] * n_settlements + ["news"] * n_news
+        random.shuffle(types)
+        return types
 
 
 # =============================================================================
@@ -162,11 +254,50 @@ def ask_perplexity(messages: list, max_tokens: int = 1024) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
+def research_topic(category: str, existing_titles: list[str] = None) -> str:
+    """Use Perplexity to research real lawsuits in a category. Returns structured research."""
+    avoid_section = ""
+    if existing_titles:
+        titles_sample = existing_titles[:20]
+        avoid_section = (
+            "\n\nIMPORTANT: Do NOT research any of these lawsuits — they are already covered on our site:\n"
+            + "\n".join(f"- {t}" for t in titles_sample)
+            + "\n\nFind DIFFERENT lawsuits not in the list above.\n"
+        )
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a legal research assistant. Search the web for real, current information "
+                "about class action lawsuits. Return only verified facts with sources."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f'Research real, current class action lawsuits or mass tort litigation related to "{category}".\n\n'
+                "Return structured information including:\n"
+                "- Specific lawsuit names and case numbers\n"
+                "- Defendants/companies involved\n"
+                "- Settlement amounts (if known)\n"
+                "- MDL numbers (if applicable)\n"
+                "- Current litigation status\n"
+                "- Recent developments (last 24 months)\n"
+                "- Source URLs\n\n"
+                "Focus on lawsuits that are active or recently settled.\n"
+                "Limit response to 300-500 words. Use bullet points."
+                + avoid_section
+            ),
+        },
+    ]
+    return ask_perplexity(messages, max_tokens=1024)
+
+
 def research_settlement(category: str, topic_url: str = "", topic_idea: str = "", existing_titles: list[str] = None) -> str:
     """Use Perplexity to research real settlements. Returns structured research."""
     avoid_section = ""
     if existing_titles and not topic_url and not topic_idea:
-        # Only add avoid list for category-based research (not specific topic/URL)
         titles_sample = existing_titles[:20]
         avoid_section = (
             "\n\nIMPORTANT: Do NOT research any of these settlements — they are already covered on our site:\n"
@@ -238,7 +369,7 @@ def research_settlement(category: str, topic_url: str = "", topic_idea: str = ""
 # CLAUDE API (NO WEB SEARCH — uses Perplexity research context)
 # =============================================================================
 
-def generate_settlement(client: anthropic.Anthropic, system_prompt: str, article_prompt: str) -> dict:
+def generate_article(client: anthropic.Anthropic, system_prompt: str, article_prompt: str) -> dict:
     max_retries = 3
     for attempt in range(max_retries + 1):
         try:
@@ -268,10 +399,10 @@ def generate_settlement(client: anthropic.Anthropic, system_prompt: str, article
 
     json_text = raw_text.strip()
 
-    # If response has no JSON at all, Claude likely couldn't find a settlement
+    # If response has no JSON at all, Claude likely couldn't produce a valid article
     if '{' not in json_text:
         raise ValueError(
-            f"Claude did not return JSON — likely no active settlement found for this category. "
+            f"Claude did not return JSON — likely no valid content found. "
             f"Response preview: {raw_text[:300]}"
         )
 
@@ -308,18 +439,10 @@ def generate_settlement(client: anthropic.Anthropic, system_prompt: str, article
 # DATABASE WRITES
 # =============================================================================
 
-def write_site_article(supabase_client, article_id: str, article_data: dict, category: str, site_id: str):
+def write_site_article(supabase_client, article_id: str, article_data: dict, category: str, site_id: str, content_type: str):
+    """Write an article to the site DB. Handles both news and settlement types."""
     base_slug = article_data.get("slug") or slugify(article_data.get("title", "untitled"))
     unique_slug = f"{base_slug}-{article_id[:8]}" if not base_slug.endswith(article_id[:8]) else base_slug
-
-    # Handle proof_required — DB expects boolean, Claude may return string
-    proof_required_raw = article_data.get("proof_required")
-    if isinstance(proof_required_raw, bool):
-        proof_required = proof_required_raw
-    elif isinstance(proof_required_raw, str):
-        proof_required = "no proof" not in proof_required_raw.lower()
-    else:
-        proof_required = None
 
     row = {
         "id": article_id,
@@ -329,23 +452,38 @@ def write_site_article(supabase_client, article_id: str, article_data: dict, cat
         "content": article_data.get("content", ""),
         "meta_description": article_data.get("meta_description", ""),
         "category": article_data.get("category", category),
-        "news_type": "settlement",
         "content_stage": "draft",
         "published_at": datetime.now(timezone.utc).isoformat(),
-        "case_name": article_data.get("case_name"),
-        "case_status": article_data.get("case_status", "filed"),
-        "settlement_amount": article_data.get("settlement_amount"),
-        "claim_deadline": article_data.get("claim_deadline"),
-        "claim_url": article_data.get("claim_url"),
-        "settlement_website": article_data.get("settlement_website"),
-        "claims_administrator": article_data.get("claims_administrator"),
-        "class_counsel": article_data.get("class_counsel"),
-        "proof_required": proof_required,
-        "potential_reward": article_data.get("potential_reward"),
-        "location": article_data.get("location"),
     }
 
+    if content_type == "settlement":
+        row["news_type"] = "settlement"
+
+        # Handle proof_required — DB expects boolean, Claude may return string
+        proof_required_raw = article_data.get("proof_required")
+        if isinstance(proof_required_raw, bool):
+            row["proof_required"] = proof_required_raw
+        elif isinstance(proof_required_raw, str):
+            row["proof_required"] = "no proof" not in proof_required_raw.lower()
+
+        # Settlement metadata fields
+        row["case_name"] = article_data.get("case_name")
+        row["case_status"] = article_data.get("case_status", "filed")
+        row["settlement_amount"] = article_data.get("settlement_amount")
+        row["claim_deadline"] = article_data.get("claim_deadline")
+        row["claim_url"] = article_data.get("claim_url")
+        row["settlement_website"] = article_data.get("settlement_website")
+        row["claims_administrator"] = article_data.get("claims_administrator")
+        row["class_counsel"] = article_data.get("class_counsel")
+        row["potential_reward"] = article_data.get("potential_reward")
+        row["location"] = article_data.get("location")
+    else:
+        # News articles
+        row["news_type"] = article_data.get("news_type", "analysis")
+
+    # Strip None values to avoid sending nulls for optional fields
     row = {k: v for k, v in row.items() if v is not None}
+
     result = supabase_client.table("articles").insert(row).execute()
     return result
 
@@ -364,7 +502,7 @@ def log_admin_error(admin_client, site_id: str, message: str, details: dict = No
     try:
         admin_client.table("error_logs").insert({
             "site_id": site_id,
-            "source": "generate_settlements",
+            "source": "generate_articles",
             "severity": "error",
             "message": message,
             "details": details or {},
@@ -419,9 +557,10 @@ def get_site_id(admin_client) -> str | None:
 def main():
     start_time = time.time()
     print(f"=" * 60)
-    print(f"Settlement Generation — {datetime.now(timezone.utc).isoformat()}")
+    print(f"Article Generation — {datetime.now(timezone.utc).isoformat()}")
     print(f"Model: {MODEL}")
     print(f"Articles: {ARTICLES_COUNT}")
+    print(f"Content Type: {CONTENT_TYPE}")
     print(f"Mode: {GENERATION_MODE}")
     print(f"Prompt Version: {PROMPT_VERSION}")
     print(f"Research: Perplexity ({PERPLEXITY_MODEL})")
@@ -432,15 +571,16 @@ def main():
     print(f"Admin Run ID: {ADMIN_RUN_ID or '(none — standalone run)'}")
     print(f"=" * 60)
 
-    # Load prompts
-    system_prompt = load_prompt("settlement_system_prompt.txt")
-    article_prompt_template = load_prompt("settlement_article_prompt.txt")
+    # Load all prompt pairs
+    news_system_prompt = load_prompt("system_prompt.txt")
+    news_article_prompt_template = load_prompt("article_prompt.txt")
+    settlement_system_prompt = load_prompt("settlement_system_prompt.txt")
+    settlement_article_prompt_template = load_prompt("settlement_article_prompt.txt")
 
-    system_prompt_hash = sha256_short(system_prompt)
-    article_prompt_template_hash = sha256_short(article_prompt_template)
-
-    print(f"System prompt hash:  {system_prompt_hash}")
-    print(f"Article prompt template hash: {article_prompt_template_hash}")
+    print(f"News system prompt hash:       {sha256_short(news_system_prompt)}")
+    print(f"News article prompt hash:      {sha256_short(news_article_prompt_template)}")
+    print(f"Settlement system prompt hash:  {sha256_short(settlement_system_prompt)}")
+    print(f"Settlement article prompt hash: {sha256_short(settlement_article_prompt_template)}")
 
     # Init clients
     claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -448,11 +588,12 @@ def main():
     admin_conn = get_admin_db()
 
     if GENERATION_MODE == "batch":
-        print("WARNING: Batch mode not yet implemented. Falling back to standard.")
+        print("WARNING: Batch mode (Anthropic Batch API) is not yet implemented.")
+        print("         Falling back to standard mode for this run.")
 
     site_id = get_site_id(admin_conn)
     if admin_conn and ADMIN_RUN_ID and not site_id:
-        print("WARNING: Could not resolve site_id. Admin writes will be skipped.")
+        print("WARNING: Could not resolve site_id. Admin writes will be skipped for run_articles.")
 
     # Get site_id from site DB
     site_db_site_id = None
@@ -464,9 +605,13 @@ def main():
     except Exception as e:
         print(f"WARNING: Could not look up site_id from site DB: {e}")
 
-    categories = pick_categories(ARTICLES_COUNT)
+    # Assign content types and categories
+    content_types = assign_content_types(ARTICLES_COUNT)
+    categories = pick_categories_balanced(site_db, ARTICLES_COUNT)
 
-    # Deduplication: fetch existing articles for both prompt-level and post-generation checks
+    print(f"Content plan: {list(zip(content_types, categories))}")
+
+    # Deduplication: fetch existing articles
     existing_articles = load_existing_articles(site_db)
     existing_titles = []
     for row in existing_articles:
@@ -488,15 +633,31 @@ def main():
     for i in range(ARTICLES_COUNT):
         article_id = str(uuid.uuid4())
         category = categories[i]
+        article_content_type = content_types[i]
+        type_label = "Settlement" if article_content_type == "settlement" else "News"
 
-        print(f"\n── Settlement {i + 1}/{ARTICLES_COUNT} ──")
+        # Select appropriate prompts
+        if article_content_type == "settlement":
+            system_prompt = settlement_system_prompt
+            article_prompt_template = settlement_article_prompt_template
+        else:
+            system_prompt = news_system_prompt
+            article_prompt_template = news_article_prompt_template
+
+        system_prompt_hash = sha256_short(system_prompt)
+
+        print(f"\n── {type_label} {i + 1}/{ARTICLES_COUNT} ──")
         print(f"  UUID:     {article_id}")
+        print(f"  Type:     {type_label}")
         print(f"  Category: {category}")
         print(f"  🔍 Researching via Perplexity...")
 
         try:
-            # Step 1: Research real settlements via Perplexity
-            research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA, existing_titles)
+            # Step 1: Research via Perplexity (different function per type)
+            if article_content_type == "settlement":
+                research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA, existing_titles)
+            else:
+                research_context = research_topic(category, existing_titles)
             print(f"  ✓ Research complete ({len(research_context)} chars)")
 
             # Step 2: Build prompt with research context injected
@@ -507,8 +668,8 @@ def main():
 
             article_prompt_hash = sha256_short(article_prompt)
 
-            # Step 3: Generate settlement article with Claude (no web search)
-            result = generate_settlement(claude, system_prompt, article_prompt)
+            # Step 3: Generate article with Claude (no web search)
+            result = generate_article(claude, system_prompt, article_prompt)
             article_data = result["article"]
             input_tokens = result["input_tokens"]
             output_tokens = result["output_tokens"]
@@ -520,13 +681,12 @@ def main():
             slug = f"{article_data.get('slug') or slugify(title)}-{article_id[:8]}"
             word_count = len(article_data.get("content", "").split())
             source_url = article_data.get("source_url", "")
-            settlement_amount = article_data.get("settlement_amount", "N/A")
-            claim_deadline = article_data.get("claim_deadline", "N/A")
 
             print(f"  Title:  {title}")
             print(f"  Slug:   {slug}")
-            print(f"  Amount: {settlement_amount}")
-            print(f"  Deadline: {claim_deadline}")
+            if article_content_type == "settlement":
+                print(f"  Amount: {article_data.get('settlement_amount', 'N/A')}")
+                print(f"  Deadline: {article_data.get('claim_deadline', 'N/A')}")
             print(f"  Words:  {word_count}")
             print(f"  Source: {source_url[:60]}..." if len(str(source_url)) > 60 else f"  Source: {source_url}")
             print(f"  Tokens: {input_tokens} in / {output_tokens} out")
@@ -537,7 +697,7 @@ def main():
                 articles_failed += 1
                 continue
 
-            write_site_article(site_db, article_id, article_data, category, site_db_site_id)
+            write_site_article(site_db, article_id, article_data, category, site_db_site_id, article_content_type)
             print(f"  ✓ Site DB: written")
             articles_generated += 1
             articles_published += 1
@@ -559,7 +719,7 @@ def main():
                     "model_used": MODEL,
                     "temperature": None,
                     "top_p": None,
-                    "generation_params": {"research": "perplexity", "content_type": "settlement"},
+                    "generation_params": {"research": "perplexity", "content_type": article_content_type},
                     "status": "published",
                     "word_count": word_count,
                     "input_tokens": input_tokens,
@@ -569,13 +729,14 @@ def main():
 
         except Exception as e:
             articles_failed += 1
-            error_msg = f"Settlement {i + 1} ({category}): {str(e)}"
+            error_msg = f"{type_label} {i + 1} ({category}): {str(e)}"
             errors.append(error_msg)
             print(f"  ✗ FAILED: {e}")
             traceback.print_exc()
             log_admin_error(admin_conn, site_id, error_msg, {
                 "article_number": i + 1,
                 "category": category,
+                "content_type": article_content_type,
                 "article_id": article_id,
                 "traceback": traceback.format_exc(),
             })

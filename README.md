@@ -70,8 +70,7 @@ public/
   robots.txt                    # Crawl directives + sitemap references
   _headers                      # Cloudflare headers (AI content signals)
 scripts/
-  generate_content.py           # General article generation
-  generate_settlements.py       # Settlement-focused generation
+  generate_articles.py          # Unified article generation (news + settlements)
   review_pipeline.py            # Fact-check, update, rewrite pipeline
   generate-missing-images.ts    # Hero image generation (DALL-E 3)
   validate-seo.mjs             # SEO validation script (54 checks)
@@ -201,16 +200,24 @@ Duplicate detection runs at two levels:
 1. **Prompt-level** — existing article titles and case names are sent to Perplexity with instructions to avoid researching the same cases
 2. **Post-generation** — after Claude returns an article, keyword-based Jaccard similarity is checked against all existing articles. If the new title or case name overlaps >= 40% with any existing article, it's rejected as a duplicate
 
-The dedup logic lives in `scripts/lib/dedup.py` and is shared across all 3 pipeline scripts.
+The dedup logic lives in `scripts/lib/dedup.py` and is shared across the generation and review pipeline scripts.
 
 ### Running the pipeline
 
-The pipeline runs via two GitHub Actions workflows:
+The pipeline runs via a single GitHub Actions workflow:
 
-- **Generate Content** (`generate-content.yml`) — general news articles, runs daily at 12:00 UTC + manual trigger
-- **Generate Settlements** (`generate-settlements.yml`) — settlement-specific articles, manual trigger only
+- **Generate Articles** (`generate-articles.yml`) — generates both news and settlement articles. Runs daily at 12:00 UTC (cron) and via manual trigger.
 
-Both accept inputs for article count, model, and categories. Generate Content also accepts `generation_mode` (batch/standard) and `prompt_version`. Generate Settlements also accepts an optional `topic_url` or `topic_idea` to target a specific case.
+The `content_type` input controls what gets generated:
+- `mixed` (default) — generates a mix of news and settlement articles (roughly half and half)
+- `news` — only news/analysis articles
+- `settlement` — only settlement articles
+
+The daily cron run uses defaults: `content_type=mixed`, `articles_count=2`, producing approximately 1 news article and 1 settlement per day.
+
+Additional inputs: `model`, `generation_mode` (batch/standard), `categories`, `topic_url`, `topic_idea` (for targeted settlement generation), `admin_run_id`, `prompt_version`.
+
+Categories are auto-balanced — the script queries existing article counts per category and prefers under-represented categories to keep the six category hub pages balanced. Passing explicit categories via the `categories` input overrides this behavior.
 
 ## Environment Variables
 

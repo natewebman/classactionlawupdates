@@ -215,6 +215,8 @@ def human_rewrite(claude_client: anthropic.Anthropic, article: dict) -> str:
             "Avoid all AI writing patterns: no overuse of bullet points, no repetitive transition phrases, "
             "no generic openers like 'In today's world' or closers like 'In conclusion'. "
             "Keep every fact exactly as given — do not add or remove information. "
+            "Preserve all heading tags (<h2>, <h3>) and their hierarchy — do not merge, remove, or reorder sections. "
+            "You may lightly edit heading text for natural flow, but keep the same number of sections. "
             "Return ONLY the rewritten article content. No preamble, no explanation."
         ),
         messages=[
@@ -304,9 +306,17 @@ def regenerate(claude_client: anthropic.Anthropic, article: dict, existing_title
             '  "slug": "url-safe-slug-version-of-title",\n'
             '  "content": "Full article body in HTML format. Use <h2>, <h3>, <p>, <ul>, <li> tags. Minimum 800 words.",\n'
             '  "meta_description": "SEO meta description, 150-160 characters",\n'
-            '  "case_name": "Official case name or null",\n'
-            '  "settlement_amount": "Total settlement amount or null",\n'
+            '  "case_name": "Official case name (e.g., Smith v. Corporation Inc.) or null",\n'
+            '  "case_status": "One of: filed, pending, settled, approved, paying, closed",\n'
+            '  "settlement_amount": "Total settlement amount (e.g., $5.5 million) or null",\n'
             '  "claim_deadline": "YYYY-MM-DD or null",\n'
+            '  "claim_url": "Direct URL where people can file a claim, or null",\n'
+            '  "settlement_website": "Official settlement website URL, or null",\n'
+            '  "claims_administrator": "Name of claims administrator, or null",\n'
+            '  "class_counsel": "Name of lead plaintiff law firm, or null",\n'
+            '  "proof_required": "What proof is needed (e.g., Receipt required or No proof needed), or null",\n'
+            '  "potential_reward": "What individual claimants can expect (e.g., $20-$100), or null",\n'
+            '  "location": "Jurisdiction or affected area (e.g., California or Nationwide)",\n'
             '  "source_url": "Real URL from research or null"\n'
             '}\n'
             "Do NOT include any text outside the JSON object."
