@@ -28,6 +28,10 @@ from pathlib import Path
 import anthropic
 from supabase import create_client
 
+# Add scripts/lib to path for shared utilities
+sys.path.insert(0, str(Path(__file__).parent / "lib"))
+from dedup import is_duplicate
+
 
 # =============================================================================
 # CONFIG
@@ -349,7 +353,7 @@ def regenerate(claude_client: anthropic.Anthropic, article: dict, existing_title
 # PROCESS ONE ARTICLE
 # =============================================================================
 
-def process_article(article: dict, site_db, admin_db, claude_client: anthropic.Anthropic, existing_titles: list[str] = None) -> bool:
+def process_article(article: dict, site_db, admin_db, claude_client: anthropic.Anthropic, existing_titles: list[str] = None, existing_articles: list[dict] = None) -> bool:
     """
     Run a single article through all 3 pipeline steps.
     Returns True if article reaches 'published', False if it fails.
@@ -404,6 +408,15 @@ def process_article(article: dict, site_db, admin_db, claude_client: anthropic.A
 
             if "title" in updates and updates["title"] != old_title:
                 print(f"   ↳ New title: {updates['title'][:70]}")
+
+            # Post-regeneration duplicate check
+            new_title = updates.get("title", article.get("title", ""))
+            new_case = updates.get("case_name", article.get("case_name"))
+            if existing_articles and is_duplicate(new_title, new_case, existing_articles):
+                print(f"   ⚠ Regenerated article is a DUPLICATE — marking failed")
+                update_stage(site_db, article_id, "failed")
+                sync_admin_stage(admin_db, article_id, "failed")
+                return False
 
             site_db.table("articles").update(updates).eq("id", article_id).execute()
             print(f"   ↳ Site DB: content_stage = 'draft'")
@@ -478,7 +491,8 @@ def main():
 
     print(f"\nFound {len(articles)} draft article(s) to process.")
 
-    # Deduplication: load existing titles to avoid duplicates on regeneration
+    # Deduplication: load existing articles for prompt-level and post-regen checks
+    existing_articles = []
     existing_titles = []
     try:
         existing = site_db.table("articles") \
@@ -486,12 +500,12 @@ def main():
             .neq("content_stage", "failed") \
             .neq("content_stage", "draft") \
             .execute()
-        if existing.data:
-            for row in existing.data:
-                if row.get("title"):
-                    existing_titles.append(row["title"])
-                if row.get("case_name"):
-                    existing_titles.append(row["case_name"])
+        existing_articles = existing.data or []
+        for row in existing_articles:
+            if row.get("title"):
+                existing_titles.append(row["title"])
+            if row.get("case_name"):
+                existing_titles.append(row["case_name"])
         existing_titles = list(set(existing_titles))
         if existing_titles:
             print(f"Dedup: {len(existing_titles)} existing titles/cases loaded")
@@ -504,7 +518,7 @@ def main():
 
     for article in articles:
         try:
-            ok = process_article(article, site_db, admin_db, claude, existing_titles)
+            ok = process_article(article, site_db, admin_db, claude, existing_titles, existing_articles)
             if ok:
                 succeeded += 1
             else:
