@@ -233,15 +233,21 @@ def human_rewrite(claude_client: anthropic.Anthropic, article: dict) -> str:
 
 REGEN_MODEL = "claude-haiku-4-5-20251001"  # Cheap model for regeneration drafts
 
-def regenerate(claude_client: anthropic.Anthropic, article: dict) -> str:
+def regenerate(claude_client: anthropic.Anthropic, article: dict, existing_titles: list[str] = None) -> dict:
     """
     Regenerate content for an article that failed fact-checking.
-    Uses Perplexity to research a REAL lawsuit, then Haiku to write it.
-    Returns the new article content.
+    Uses Perplexity to research the SPECIFIC lawsuit by name, then Haiku to rewrite.
+    Returns a dict with updated fields: {content, title, slug, meta_description, ...}
     """
     category = article.get('category', 'consumer protection')
+    title = article.get('title', '')
+    case_name = article.get('case_name', '')
 
-    # Step 1: Research real lawsuits via Perplexity
+    # Build a specific search query from the article's own metadata
+    search_topic = case_name or title
+    print(f"   ↳ Researching: {search_topic[:80]}")
+
+    # Step 1: Research THIS SPECIFIC lawsuit/settlement via Perplexity
     research_messages = [
         {
             "role": "system",
@@ -253,46 +259,65 @@ def regenerate(claude_client: anthropic.Anthropic, article: dict) -> str:
         {
             "role": "user",
             "content": (
-                f'Research real, current class action lawsuits or mass tort litigation related to "{category}".\n\n'
+                f'Research this specific class action lawsuit or settlement: "{search_topic}"\n\n'
+                f"Category: {category}\n\n"
                 "Return structured information including:\n"
-                "- Specific lawsuit names and case numbers\n"
-                "- Defendants/companies involved\n"
-                "- Settlement amounts (if known)\n"
-                "- MDL numbers (if applicable)\n"
-                "- Current litigation status\n"
-                "- Recent developments (last 24 months)\n"
+                "- Official case name and case number\n"
+                "- Defendant company/companies\n"
+                "- Settlement amount (if known)\n"
+                "- Claim deadline and how to file\n"
+                "- Eligibility criteria\n"
+                "- Current case status (filed, pending, settled, approved, paying)\n"
+                "- Claims administrator and settlement website URL\n"
                 "- Source URLs\n\n"
-                "Focus on lawsuits that are active or recently settled.\n"
-                "Limit response to 300-500 words. Use bullet points."
+                "If this specific case cannot be found or appears to be fabricated, "
+                "say 'CASE NOT FOUND' and then provide details about a REAL, ACTIVE "
+                f"class action settlement in the '{category}' category instead."
+                + (
+                    "\n\nDo NOT suggest any of these cases (already on our site):\n"
+                    + "\n".join(f"- {t}" for t in (existing_titles or [])[:15])
+                    if existing_titles else ""
+                )
+                + "\n\nLimit response to 300-500 words. Use bullet points."
             ),
         },
     ]
     research_context = ask_perplexity(research_messages, max_tokens=1024)
 
-    # Step 2: Generate new article with Haiku using research context
+    # Step 2: Generate corrected article with Haiku — return JSON so we can update metadata too
     response = claude_client.messages.create(
         model=REGEN_MODEL,
         max_tokens=8192,
         system=(
             "You are a legal content writer for ClassActionLawUpdates.com. "
-            "You will be given research context about real lawsuits. "
+            "You will be given research context about a real lawsuit or settlement. "
             "Only write about lawsuits described in the research context. Never invent case details. "
-            "If the research context does not include a fact, do not invent it. "
-            "Return ONLY the article content in HTML format using <h2>, <h3>, <p>, <ul>, <li> tags. "
-            "Do not include any preamble, explanation, or JSON wrapper — just the article HTML content."
+            "If the research context does not include a fact, do not invent it.\n\n"
+            "IMPORTANT: You must respond with ONLY a valid JSON object (no markdown, no code fences). "
+            "The JSON must contain these keys:\n"
+            '{\n'
+            '  "title": "Article headline (compelling, SEO-friendly, under 70 chars)",\n'
+            '  "slug": "url-safe-slug-version-of-title",\n'
+            '  "content": "Full article body in HTML format. Use <h2>, <h3>, <p>, <ul>, <li> tags. Minimum 800 words.",\n'
+            '  "meta_description": "SEO meta description, 150-160 characters",\n'
+            '  "case_name": "Official case name or null",\n'
+            '  "settlement_amount": "Total settlement amount or null",\n'
+            '  "claim_deadline": "YYYY-MM-DD or null",\n'
+            '  "source_url": "Real URL from research or null"\n'
+            '}\n'
+            "Do NOT include any text outside the JSON object."
         ),
         messages=[
             {
                 "role": "user",
                 "content": (
-                    f"The previous article titled '{article['title']}' failed fact-checking because it contained "
-                    f"inaccurate or hallucinated information.\n\n"
+                    f"The previous article titled '{title}' failed fact-checking.\n\n"
                     f"RESEARCH CONTEXT:\n{research_context}\n\n"
-                    f"Using ONLY the research above, pick ONE real, well-documented lawsuit and write a new "
-                    f"article (minimum 800 words) about that specific lawsuit. "
-                    f"Include real case names, real defendant companies, real court names, and accurate details "
-                    f"from the research context.\n\n"
-                    f"Return ONLY the article content in HTML format. No preamble, no JSON."
+                    f"Using ONLY the research above, write an accurate article about this lawsuit/settlement. "
+                    f"If the research found a different case (because the original was fabricated), "
+                    f"write about the real case the research found instead — update the title to match.\n\n"
+                    f"The title and content MUST be about the SAME case. "
+                    f"Respond with ONLY the JSON object."
                 ),
             }
         ],
@@ -303,14 +328,28 @@ def regenerate(claude_client: anthropic.Anthropic, article: dict) -> str:
         if block.type == "text":
             raw_text += block.text
 
-    return raw_text.strip()
+    # Parse the JSON response
+    raw_text = raw_text.strip()
+    # Strip markdown code fences if present
+    if raw_text.startswith("```"):
+        lines = raw_text.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        raw_text = "\n".join(lines).strip()
+
+    try:
+        parsed = json.loads(raw_text)
+        return parsed
+    except json.JSONDecodeError:
+        # Fallback: return just the content as raw HTML, keep original metadata
+        print(f"   ⚠ Could not parse regeneration JSON — using raw content")
+        return {"content": raw_text}
 
 
 # =============================================================================
 # PROCESS ONE ARTICLE
 # =============================================================================
 
-def process_article(article: dict, site_db, admin_db, claude_client: anthropic.Anthropic) -> bool:
+def process_article(article: dict, site_db, admin_db, claude_client: anthropic.Anthropic, existing_titles: list[str] = None) -> bool:
     """
     Run a single article through all 3 pipeline steps.
     Returns True if article reaches 'published', False if it fails.
@@ -341,10 +380,26 @@ def process_article(article: dict, site_db, admin_db, claude_client: anthropic.A
                 sync_admin_stage(admin_db, article_id, "failed")
                 return False
 
-            print(f"   ↻ Regenerating article with web search (attempt {attempt}/{MAX_REGEN_ATTEMPTS})...")
-            new_content = regenerate(claude_client, article)
+            print(f"   ↻ Regenerating article via Perplexity research (attempt {attempt}/{MAX_REGEN_ATTEMPTS})...")
+            regen_result = regenerate(claude_client, article, existing_titles)
+
+            # Update content
+            new_content = regen_result.get("content", article["content"])
             article["content"] = new_content
-            update_stage(site_db, article_id, "draft", new_content)
+
+            # Update metadata if regeneration provided it (title, slug, case_name, etc.)
+            updates = {"content_stage": "draft", "content": new_content}
+            for field in ("title", "slug", "meta_description", "case_name",
+                          "settlement_amount", "claim_deadline", "source_url"):
+                if regen_result.get(field):
+                    updates[field] = regen_result[field]
+                    article[field] = regen_result[field]
+
+            if "title" in updates and updates["title"] != article.get("title"):
+                print(f"   ↳ New title: {updates.get('title', '')[:70]}")
+
+            site_db.table("articles").update(updates).eq("id", article_id).execute()
+            print(f"   ↳ Site DB: content_stage = 'draft'")
             time.sleep(2)  # Brief pause before re-checking
 
     # ─────────────────────────────────────────────────────────────
@@ -414,14 +469,35 @@ def main():
         print("\nNo draft articles found — pipeline has nothing to do.")
         return
 
-    print(f"\nFound {len(articles)} draft article(s) to process.\n")
+    print(f"\nFound {len(articles)} draft article(s) to process.")
+
+    # Deduplication: load existing titles to avoid duplicates on regeneration
+    existing_titles = []
+    try:
+        existing = site_db.table("articles") \
+            .select("title, case_name") \
+            .neq("content_stage", "failed") \
+            .neq("content_stage", "draft") \
+            .execute()
+        if existing.data:
+            for row in existing.data:
+                if row.get("title"):
+                    existing_titles.append(row["title"])
+                if row.get("case_name"):
+                    existing_titles.append(row["case_name"])
+        existing_titles = list(set(existing_titles))
+        if existing_titles:
+            print(f"Dedup: {len(existing_titles)} existing titles/cases loaded")
+    except Exception as e:
+        print(f"WARNING: Could not load existing titles for dedup: {e}")
+    print()
 
     succeeded = 0
     failed    = 0
 
     for article in articles:
         try:
-            ok = process_article(article, site_db, admin_db, claude)
+            ok = process_article(article, site_db, admin_db, claude, existing_titles)
             if ok:
                 succeeded += 1
             else:

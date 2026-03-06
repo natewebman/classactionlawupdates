@@ -158,8 +158,18 @@ def ask_perplexity(messages: list, max_tokens: int = 1024) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
-def research_settlement(category: str, topic_url: str = "", topic_idea: str = "") -> str:
+def research_settlement(category: str, topic_url: str = "", topic_idea: str = "", existing_titles: list[str] = None) -> str:
     """Use Perplexity to research real settlements. Returns structured research."""
+    avoid_section = ""
+    if existing_titles and not topic_url and not topic_idea:
+        # Only add avoid list for category-based research (not specific topic/URL)
+        titles_sample = existing_titles[:20]
+        avoid_section = (
+            "\n\nIMPORTANT: Do NOT research any of these settlements — they are already covered on our site:\n"
+            + "\n".join(f"- {t}" for t in titles_sample)
+            + "\n\nFind DIFFERENT settlements not in the list above.\n"
+        )
+
     if topic_url:
         user_content = (
             f"Research the class action settlement found at this URL: {topic_url}\n\n"
@@ -203,6 +213,7 @@ def research_settlement(category: str, topic_url: str = "", topic_idea: str = ""
             "- Source URLs\n\n"
             "Focus on settlements where the claim deadline has NOT passed.\n"
             "Limit response to 300-500 words. Use bullet points."
+            + avoid_section
         )
 
     messages = [
@@ -451,6 +462,25 @@ def main():
 
     categories = pick_categories(ARTICLES_COUNT)
 
+    # Deduplication: fetch existing article titles to avoid duplicates
+    existing_titles = []
+    try:
+        existing = site_db.table("articles") \
+            .select("title, case_name") \
+            .neq("content_stage", "failed") \
+            .execute()
+        if existing.data:
+            for row in existing.data:
+                if row.get("title"):
+                    existing_titles.append(row["title"])
+                if row.get("case_name"):
+                    existing_titles.append(row["case_name"])
+        existing_titles = list(set(existing_titles))
+        if existing_titles:
+            print(f"Dedup: {len(existing_titles)} existing titles/cases loaded")
+    except Exception as e:
+        print(f"WARNING: Could not load existing titles for dedup: {e}")
+
     total_input_tokens = 0
     total_output_tokens = 0
     articles_generated = 0
@@ -469,7 +499,7 @@ def main():
 
         try:
             # Step 1: Research real settlements via Perplexity
-            research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA)
+            research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA, existing_titles)
             print(f"  ✓ Research complete ({len(research_context)} chars)")
 
             # Step 2: Build prompt with research context injected
