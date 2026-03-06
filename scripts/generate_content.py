@@ -161,8 +161,18 @@ def ask_perplexity(messages: list, max_tokens: int = 1024) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
-def research_topic(category: str) -> str:
+def research_topic(category: str, existing_titles: list[str] = None) -> str:
     """Use Perplexity to research real lawsuits in a category. Returns structured research."""
+    avoid_section = ""
+    if existing_titles:
+        # Show up to 20 existing titles to avoid
+        titles_sample = existing_titles[:20]
+        avoid_section = (
+            "\n\nIMPORTANT: Do NOT research any of these lawsuits — they are already covered on our site:\n"
+            + "\n".join(f"- {t}" for t in titles_sample)
+            + "\n\nFind DIFFERENT lawsuits not in the list above.\n"
+        )
+
     messages = [
         {
             "role": "system",
@@ -185,6 +195,7 @@ def research_topic(category: str) -> str:
                 "- Source URLs\n\n"
                 "Focus on lawsuits that are active or recently settled.\n"
                 "Limit response to 300-500 words. Use bullet points."
+                + avoid_section
             ),
         },
     ]
@@ -390,6 +401,25 @@ def main():
 
     categories = pick_categories(ARTICLES_COUNT)
 
+    # Deduplication: fetch existing article titles to avoid duplicates
+    existing_titles = []
+    try:
+        existing = site_db.table("articles") \
+            .select("title, case_name") \
+            .neq("content_stage", "failed") \
+            .execute()
+        if existing.data:
+            for row in existing.data:
+                if row.get("title"):
+                    existing_titles.append(row["title"])
+                if row.get("case_name"):
+                    existing_titles.append(row["case_name"])
+        existing_titles = list(set(existing_titles))
+        if existing_titles:
+            print(f"Dedup: {len(existing_titles)} existing titles/cases loaded")
+    except Exception as e:
+        print(f"WARNING: Could not load existing titles for dedup: {e}")
+
     total_input_tokens = 0
     total_output_tokens = 0
     articles_generated = 0
@@ -408,7 +438,7 @@ def main():
 
         try:
             # Step 1: Research real lawsuits via Perplexity
-            research_context = research_topic(category)
+            research_context = research_topic(category, existing_titles)
             print(f"  ✓ Research complete ({len(research_context)} chars)")
 
             # Step 2: Build prompt with research context injected
