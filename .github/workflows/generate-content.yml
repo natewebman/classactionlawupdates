@@ -94,21 +94,11 @@ jobs:
         run: npx tsx scripts/generate-missing-images.ts
       - name: Trigger site rebuild
         if: success()
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          HOOK=$(python3 -c "
-          import json, urllib.request
-          url = '$SUPABASE_URL/rest/v1/sites?site_key=eq.classactionlawupdates&select=deploy_hook_url'
-          req = urllib.request.Request(url, headers={'apikey': '$SUPABASE_KEY', 'Authorization': 'Bearer $SUPABASE_KEY'})
-          data = json.loads(urllib.request.urlopen(req).read())
-          print(data[0]['deploy_hook_url'] if data and data[0].get('deploy_hook_url') else '')
-          ")
-          if [ -n "$HOOK" ]; then
-            echo "Triggering deploy..."
-            curl -s -X POST "$HOOK"
+          if [ -n "${{ secrets.DEPLOY_HOOK_URL }}" ]; then
+            echo "Triggering Cloudflare Pages rebuild..."
+            curl -s -X POST "${{ secrets.DEPLOY_HOOK_URL }}"
             echo "Deploy triggered."
           else
-            echo "No deploy hook URL found — skipping rebuild."
+            echo "DEPLOY_HOOK_URL secret not set — skipping rebuild."
           fi
