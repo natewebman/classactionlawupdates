@@ -9,7 +9,7 @@ import { siteConfig } from '../../site.config';
 const allNews = await getArticles({ limit: 50 });
 ---
 
-<BaseLayout title="News & Updates" description="Stay informed with the latest case filings and settlement news.">
+<BaseLayout title="News & Updates" description="Stay informed with the latest case filings and settlement news." breadcrumbs={[{ name: 'Home', url: '/' }, { name: 'News', url: '/news' }]}>
   <section class="bg-white py-12 lg:py-16">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Page header -->

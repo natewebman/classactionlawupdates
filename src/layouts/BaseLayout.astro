@@ -3,12 +3,14 @@ import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import '../styles/global.css';
 import { siteConfig } from '../site.config';
+import { getBreadcrumbList, getOrganization } from '../lib/structured-data';
 
 interface Props {
   title?: string;
   description?: string;
   ogImage?: string;
   noIndex?: boolean;
+  breadcrumbs?: Array<{ name: string; url: string }>;
 }
 
 const {
@@ -16,10 +18,14 @@ const {
   description = siteConfig.description,
   ogImage = '/og-default.jpg',
   noIndex = false,
+  breadcrumbs,
 } = Astro.props;
 
 const fullTitle = title === siteConfig.name ? title : `${title} | ${siteConfig.name}`;
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
+const fullOgImage = ogImage.startsWith('http') ? ogImage : new URL(ogImage, Astro.site).toString();
+const breadcrumbSchema = breadcrumbs ? getBreadcrumbList(breadcrumbs) : null;
+const orgSchema = { '@context': 'https://schema.org', ...getOrganization() };
 ---
 
 <!doctype html>
@@ -41,7 +47,7 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
     <!-- Open Graph -->
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
-    <meta property="og:image" content={ogImage} />
+    <meta property="og:image" content={fullOgImage} />
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:type" content="website" />
 
@@ -49,7 +55,15 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image" content={fullOgImage} />
+
+    <!-- Organization JSON-LD (site-wide) -->
+    <script type="application/ld+json" set:html={JSON.stringify(orgSchema)} />
+
+    <!-- Breadcrumb JSON-LD -->
+    {breadcrumbSchema && (
+      <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
+    )}
 
     <!-- Preload fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

@@ -3,9 +3,12 @@ export const prerender = false;
 
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import RelatedArticles from '../../components/RelatedArticles.astro';
+import CategoryCrossLinks from '../../components/CategoryCrossLinks.astro';
 import { getArticleBySlug } from '../../lib/supabase';
 import { siteConfig } from '../../site.config';
 import { marked } from 'marked';
+import { getNewsArticle } from '../../lib/structured-data';
+import { formatDate } from '../../lib/seo-helpers';
 
 const { slug } = Astro.params;
 const article = await getArticleBySlug(slug!);
@@ -22,34 +25,32 @@ const publishDate = article.published_at
     })
   : null;
 
+const updatedDate = formatDate(article.updated_at);
+
 const displayCategory = article.category ?? article.news_type ?? 'News';
 const heroImage = article.hero_image ?? null;
 const heroImageAlt = article.hero_image_alt ?? null;
 
-const structuredData: Record<string, unknown> = {
-  "@context": "https://schema.org",
-  "@type": "NewsArticle",
-  "headline": article.title,
-  "description": article.meta_description,
-  "datePublished": article.published_at,
-  "dateModified": article.updated_at,
-  "publisher": {
-    "@type": "Organization",
-    "name": siteConfig.name,
-    "url": `https://${siteConfig.domain}`
-  },
-  "mainEntityOfPage": {
-    "@type": "WebPage",
-    "@id": `https://${siteConfig.domain}/news/${slug}`
-  },
-  ...(heroImage ? { "image": heroImage } : {}),
-};
+// Determine if category maps to a settlement category page
+const categorySlug = displayCategory.toLowerCase().replace(/[\s&\/]+/g, '-').replace(/--+/g, '-');
+const hasCategoryPage = siteConfig.settlementCategories.some(
+  (c) => c.slug !== 'all' && c.slug === categorySlug
+);
+
+const pageUrl = `https://${siteConfig.domain}/news/${slug}`;
+const structuredData = getNewsArticle({ article, pageUrl });
+
+const breadcrumbs = [
+  { name: 'Home', url: '/' },
+  { name: 'News', url: '/news' },
+  { name: article.title, url: `/news/${slug}` },
+];
 ---
 
-<BaseLayout title={article.title} description={article.meta_description ?? ''} ogImage={heroImage ?? undefined}>
+<BaseLayout title={article.title} description={article.meta_description ?? ''} ogImage={heroImage ?? undefined} breadcrumbs={breadcrumbs}>
   <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
 
-  <article class="bg-gray-50 min-h-screen">
+  <article class="bg-gray-50 min-h-screen" data-article-id={article.id}>
     <header class="bg-gradient-to-br from-navy-700 via-navy-800 to-navy-900 relative overflow-hidden">
       <div class="absolute inset-0 opacity-10">
         <div class="absolute inset-0" style="background-image: url('data:image/svg+xml,%3Csvg width=&quot;60&quot; height=&quot;60&quot; viewBox=&quot;0 0 60 60&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;%3E%3Cg fill=&quot;none&quot; fill-rule=&quot;evenodd&quot;%3E%3Cg fill=&quot;%23ffffff&quot; fill-opacity=&quot;0.4&quot;%3E%3Cpath d=&quot;M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z&quot;/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
@@ -67,14 +68,26 @@ const structuredData: Record<string, unknown> = {
         </nav>
 
         <div class="flex flex-wrap items-center gap-3 mb-4">
-          <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
-            {displayCategory}
-          </span>
+          {hasCategoryPage ? (
+            <a href={`/category/${categorySlug}`} class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white hover:bg-white/30 transition-colors">
+              {displayCategory}
+            </a>
+          ) : (
+            <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
+              {displayCategory}
+            </span>
+          )}
           {publishDate && (
             <time class="text-sm text-white/60">{publishDate}</time>
           )}
-          <span class="text-sm text-white/40">•</span>
-          <span class="text-sm text-white/60">By {siteConfig.shortName} Staff</span>
+          <span class="text-sm text-white/40">&bull;</span>
+          <span class="text-sm text-white/60">By <a href="/about" class="text-white/80 hover:text-white transition-colors">Editorial Team</a></span>
+          {updatedDate.display && (
+            <Fragment>
+              <span class="text-sm text-white/40">&bull;</span>
+              <time datetime={updatedDate.iso} class="text-sm text-white/60">Updated {updatedDate.display}</time>
+            </Fragment>
+          )}
         </div>
 
         <h1 class="text-3xl sm:text-4xl lg:text-5xl font-heading font-black text-white leading-tight">
@@ -145,6 +158,8 @@ const structuredData: Record<string, unknown> = {
           </a>
         </div>
       </div>
+
+      <CategoryCrossLinks currentCategory={displayCategory} />
 
       <div class="mt-10 bg-navy-600 rounded-xl p-6 sm:p-8 text-center">
         <h2 class="text-xl sm:text-2xl font-heading font-bold text-white mb-2">Stay Updated on Class Actions</h2>

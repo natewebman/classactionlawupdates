@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+Disallow: /login
+Disallow: /signup
+Disallow: /subscribe
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://classactionlawupdates.com/sitemap-index.xml
+Sitemap: https://classactionlawupdates.com/sitemap-articles.xml

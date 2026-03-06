@@ -1,8 +1,12 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
+import CategoryIntro from '../../components/CategoryIntro.astro';
+import LargestSettlements from '../../components/LargestSettlements.astro';
+import CategoryCrossLinks from '../../components/CategoryCrossLinks.astro';
 import { getArticles } from '../../lib/supabase';
 import { siteConfig } from '../../site.config';
+import { getCollectionPage } from '../../lib/structured-data';
 
 export function getStaticPaths() {
   return siteConfig.settlementCategories
@@ -16,12 +20,40 @@ export function getStaticPaths() {
 const { slug } = Astro.params;
 const { categoryName } = Astro.props;
 
+// Fetch all articles for this category
 const articles = await getArticles({ category: slug, limit: 50 });
+
+// Fetch latest news that may relate to this category
+const latestNews = await getArticles({ newsType: 'settlement-news', limit: 6 });
+
+const categoryUrl = `https://${siteConfig.domain}/category/${slug}`;
+const description = `Browse ${categoryName} class action lawsuits and settlements. Find open claims, deadlines, and how to file.`;
+
+// CollectionPage JSON-LD with mainEntity list
+const collectionSchema = getCollectionPage({
+  name: `${categoryName} Class Action Settlements`,
+  description,
+  url: categoryUrl,
+  numberOfItems: articles.length,
+  mainEntity: articles.slice(0, 20).map((a) => ({
+    '@type': 'Article',
+    url: `https://${siteConfig.domain}/settlements/${a.slug}`,
+  })),
+});
+
+const breadcrumbs = [
+  { name: 'Home', url: '/' },
+  { name: 'Settlements', url: '/settlements' },
+  { name: categoryName, url: `/category/${slug}` },
+];
 ---
 
-<BaseLayout title={categoryName} description={`Browse ${categoryName} class action lawsuits and settlements.`}>
+<BaseLayout title={`${categoryName} Class Action Settlements`} description={description} breadcrumbs={breadcrumbs}>
+  <script type="application/ld+json" set:html={JSON.stringify(collectionSchema)} />
+
   <section class="bg-white py-12 lg:py-16">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
       <div class="mb-8">
         <a href="/settlements" class="inline-flex items-center gap-1 text-navy-600 text-sm font-medium hover:text-navy-800 mb-4">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -29,29 +61,80 @@ const articles = await getArticles({ category: slug, limit: 50 });
           </svg>
           All Settlements
         </a>
-        <h1 class="text-4xl font-heading font-black text-gray-900">{categoryName}</h1>
-        <p class="text-gray-500 mt-2">Browse {categoryName.toLowerCase()} class action lawsuits and settlements.</p>
+        <h1 class="text-4xl font-heading font-black text-gray-900">{categoryName} Settlements</h1>
+        <p class="text-gray-500 mt-2">{articles.length} active class action {articles.length === 1 ? 'settlement' : 'settlements'} in this category.</p>
       </div>
 
-      {articles.length > 0 ? (
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {articles.map((article) => (
-            <ArticleCard
-              title={article.title}
-              slug={article.slug}
-              category={article.category}
-              metaDescription={article.meta_description}
-              publishedAt={article.published_at}
-              basePath="/settlements"
-            />
-          ))}
-        </div>
-      ) : (
-        <div class="text-center py-16 bg-gray-50 rounded-2xl border border-gray-100">
-          <p class="text-gray-500 font-semibold">No articles in this category yet.</p>
-          <p class="text-gray-400 text-sm mt-1">Check back later for updates.</p>
+      <!-- Category Intro -->
+      <CategoryIntro slug={slug!} categoryName={categoryName} />
+
+      <!-- Largest Settlements Table -->
+      <LargestSettlements articles={articles} />
+
+      <!-- All Settlements -->
+      <div class="mt-12">
+        <h2 class="text-2xl font-heading font-bold text-gray-900 mb-6">All {categoryName} Settlements</h2>
+
+        {articles.length > 0 ? (
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {articles.map((article) => (
+              <ArticleCard
+                title={article.title}
+                slug={article.slug}
+                category={article.category}
+                metaDescription={article.meta_description}
+                publishedAt={article.published_at}
+                heroImage={article.hero_image}
+                heroImageAlt={article.hero_image_alt}
+                basePath="/settlements"
+              />
+            ))}
+          </div>
+        ) : (
+          <div class="text-center py-16 bg-gray-50 rounded-2xl border border-gray-100">
+            <p class="text-gray-500 font-semibold">No articles in this category yet.</p>
+            <p class="text-gray-400 text-sm mt-1">Check back later for updates.</p>
+          </div>
+        )}
+      </div>
+
+      <!-- Latest Related News -->
+      {latestNews.length > 0 && (
+        <div class="mt-12">
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-6">Latest Settlement News</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {latestNews.slice(0, 3).map((article) => (
+              <ArticleCard
+                title={article.title}
+                slug={article.slug}
+                newsType={article.news_type}
+                metaDescription={article.meta_description}
+                publishedAt={article.published_at}
+                heroImage={article.hero_image}
+                heroImageAlt={article.hero_image_alt}
+                basePath="/news"
+              />
+            ))}
+          </div>
         </div>
       )}
+
+      <!-- Open Settlements CTA -->
+      <div class="mt-10 bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
+        <p class="text-gray-500 text-sm mb-3">Looking for settlements you can claim right now?</p>
+        <a
+          href="/open-class-action-settlements"
+          class="inline-flex items-center gap-2 px-5 py-2.5 bg-navy-600 hover:bg-navy-700 text-white font-semibold rounded-lg transition-colors text-sm"
+        >
+          View Open Settlements
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+          </svg>
+        </a>
+      </div>
+
+      <!-- Explore Related Categories -->
+      <CategoryCrossLinks currentCategory={categoryName} />
     </div>
   </section>
 </BaseLayout>

@@ -1,0 +1,110 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { siteConfig } from '../site.config';
+
+const breadcrumbs = [
+  { name: 'Home', url: '/' },
+  { name: 'About', url: '/about' },
+];
+---
+
+<BaseLayout
+  title="About Us"
+  description="Learn about Class Action News & Settlements — our mission, editorial process, and commitment to helping consumers find and claim settlements they qualify for."
+  breadcrumbs={breadcrumbs}
+>
+  <article class="bg-white">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+      <!-- Breadcrumbs -->
+      <nav class="mb-8">
+        <ol class="flex items-center gap-1.5 text-sm text-gray-500">
+          <li><a href="/" class="hover:text-navy-600 transition-colors">Home</a></li>
+          <li><span class="mx-1">&gt;</span></li>
+          <li class="text-gray-700">About</li>
+        </ol>
+      </nav>
+
+      <h1 class="text-4xl sm:text-5xl font-heading font-black text-gray-900 mb-8">
+        About {siteConfig.name}
+      </h1>
+
+      <div class="prose-article text-lg leading-relaxed space-y-10">
+        <!-- Mission -->
+        <section>
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">Our Mission</h2>
+          <p>
+            Every year, billions of dollars in class action settlements go unclaimed simply because consumers never hear about them. {siteConfig.name} exists to change that.
+          </p>
+          <p>
+            We track active class action lawsuits and settlements across the United States, making it easy for everyday consumers to find cases they qualify for, understand the claims process, and file before deadlines pass. Whether it's a defective product, a data breach, overcharged fees, or securities fraud, our goal is to put money back in the hands of the people who were harmed.
+          </p>
+        </section>
+
+        <!-- What We Cover -->
+        <section>
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">What We Cover</h2>
+          <p>
+            We publish two types of content:
+          </p>
+          <ul class="list-disc pl-6 space-y-2">
+            <li>
+              <strong>Settlement articles</strong> — detailed guides to open class action settlements including eligibility requirements, claim deadlines, potential payouts, and step-by-step filing instructions.
+            </li>
+            <li>
+              <strong>News articles</strong> — coverage of new case filings, court rulings, and developments in ongoing class action litigation.
+            </li>
+          </ul>
+          <p>
+            We cover settlements across six categories: Stocks &amp; Securities, Personal Injury, Product Recalls, Drugs &amp; Pharmacy, Financial, and Online/Privacy.
+          </p>
+        </section>
+
+        <!-- Editorial Process -->
+        <section>
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">Our Editorial Process</h2>
+          <p>
+            Accuracy matters when money is on the line. Our content goes through a multi-step editorial pipeline before publication:
+          </p>
+          <ol class="list-decimal pl-6 space-y-3">
+            <li>
+              <strong>Research</strong> — We source settlement information from court filings, settlement administrator websites, and public legal records. Every article begins with verified source material.
+            </li>
+            <li>
+              <strong>Fact-checking</strong> — Each draft is cross-referenced against original court documents and official settlement websites to verify claim deadlines, payout amounts, eligibility criteria, and case status.
+            </li>
+            <li>
+              <strong>Editorial review</strong> — Articles are reviewed for clarity, accuracy, and completeness before publication. We ensure all settlement details are presented in plain language so any consumer can understand them.
+            </li>
+            <li>
+              <strong>Ongoing updates</strong> — Published articles are monitored and updated when deadlines change, settlement amounts are revised, or court rulings alter the case status.
+            </li>
+          </ol>
+          <p>
+            For full details on our standards, see our <a href="/editorial-policy" class="text-blue-600 hover:text-blue-800 transition-colors font-semibold">Editorial Policy</a>.
+          </p>
+        </section>
+
+        <!-- Editorial Team -->
+        <section>
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">Editorial Team</h2>
+          <p>
+            Our editorial team researches, writes, and maintains settlement content to ensure consumers have access to timely, accurate information about their legal rights and potential claims.
+          </p>
+        </section>
+
+        <!-- Contact -->
+        <section>
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">Contact Us</h2>
+          <p>
+            Have a question, correction, or tip about a settlement? We'd like to hear from you.
+          </p>
+          <address class="not-italic mt-4 text-gray-700">
+            <strong>{siteConfig.name}</strong><br />
+            {siteConfig.contact.address}<br />
+            {siteConfig.contact.city}, {siteConfig.contact.state} {siteConfig.contact.zip}
+          </address>
+        </section>
+      </div>
+    </div>
+  </article>
+</BaseLayout>

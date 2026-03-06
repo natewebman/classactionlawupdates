@@ -8,7 +8,7 @@ import { siteConfig } from '../../site.config';
 const allSettlements = await getArticles({ limit: 50 });
 ---
 
-<BaseLayout title="Lawsuits & Settlements" description="Browse current class action lawsuits and open settlements. Find out if you qualify to claim money.">
+<BaseLayout title="Lawsuits & Settlements" description="Browse current class action lawsuits and open settlements. Find out if you qualify to claim money." breadcrumbs={[{ name: 'Home', url: '/' }, { name: 'Settlements', url: '/settlements' }]}>
   <section class="bg-white py-12 lg:py-16">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Page header -->

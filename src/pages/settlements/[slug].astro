@@ -4,9 +4,16 @@ export const prerender = false;
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import CaseStatusTracker from '../../components/CaseStatusTracker.astro';
 import SettlementSidebar from '../../components/SettlementSidebar.astro';
+import SettlementDataBlock from '../../components/SettlementDataBlock.astro';
+import SettlementFAQ from '../../components/SettlementFAQ.astro';
+import SimilarSettlements from '../../components/SimilarSettlements.astro';
+import CategoryCrossLinks from '../../components/CategoryCrossLinks.astro';
 import { getArticleBySlug } from '../../lib/supabase';
 import { siteConfig } from '../../site.config';
 import { marked } from 'marked';
+import { getSettlementArticle } from '../../lib/structured-data';
+import { formatDate } from '../../lib/seo-helpers';
+import { extractBrand, extractState, toSlug, US_STATES } from '../../lib/brand-state-extraction';
 
 const { slug } = Astro.params;
 const article = await getArticleBySlug(slug!);
@@ -22,6 +29,8 @@ const publishDate = article.published_at
       year: 'numeric',
     })
   : null;
+
+const updatedDate = formatDate(article.updated_at);
 
 const displayCategory = article.category ?? 'Settlement';
 
@@ -43,30 +52,25 @@ const meta = {
 
 const pageUrl = `https://${siteConfig.domain}/settlements/${slug}`;
 
-const structuredData: Record<string, unknown> = {
-  "@context": "https://schema.org",
-  "@type": "Article",
-  "headline": article.title,
-  "description": article.meta_description,
-  "datePublished": article.published_at,
-  "dateModified": article.updated_at,
-  "publisher": {
-    "@type": "Organization",
-    "name": siteConfig.name,
-    "url": `https://${siteConfig.domain}`
-  },
-  "mainEntityOfPage": {
-    "@type": "WebPage",
-    "@id": pageUrl
-  },
-  ...(meta.heroImage ? { "image": meta.heroImage } : {}),
-};
+const structuredData = getSettlementArticle({ article, pageUrl });
+
+const breadcrumbs = [
+  { name: 'Home', url: '/' },
+  { name: 'Settlements', url: '/settlements' },
+  { name: article.title, url: `/settlements/${slug}` },
+];
+
+// Extract brand & state for contextual linking
+const brandName = extractBrand(article);
+const brandSlug = brandName ? toSlug(brandName) : null;
+const stateSlug = extractState(article);
+const stateName = stateSlug ? US_STATES[stateSlug] : null;
 ---
 
-<BaseLayout title={article.title} description={article.meta_description ?? ''} ogImage={meta.heroImage ?? undefined}>
+<BaseLayout title={article.title} description={article.meta_description ?? ''} ogImage={meta.heroImage ?? undefined} breadcrumbs={breadcrumbs}>
   <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
 
-  <article class="settlement-page bg-white">
+  <article class="settlement-page bg-white" data-article-id={article.id}>
     <!-- Header area -->
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
       <!-- Breadcrumbs -->
@@ -93,11 +97,17 @@ const structuredData: Record<string, unknown> = {
       <!-- Byline & Category -->
       <div class="flex flex-wrap items-center justify-between gap-4 mb-2">
         <div class="flex flex-wrap items-center gap-2 text-sm text-gray-600">
-          <span>By {siteConfig.name}</span>
+          <span>By <a href="/about" class="text-blue-600 hover:text-blue-800 transition-colors">Editorial Team</a></span>
           {publishDate && (
             <Fragment>
               <span class="text-gray-300">|</span>
               <time>{publishDate}</time>
+            </Fragment>
+          )}
+          {updatedDate.display && (
+            <Fragment>
+              <span class="text-gray-300">|</span>
+              <time datetime={updatedDate.iso} class="text-gray-500">Updated {updatedDate.display}</time>
             </Fragment>
           )}
         </div>
@@ -157,6 +167,17 @@ const structuredData: Record<string, unknown> = {
 
         <!-- Main Column -->
         <main class="lg:col-span-8">
+          <SettlementDataBlock
+            caseName={meta.caseName}
+            settlementAmount={meta.totalAmount}
+            claimDeadline={meta.claimDeadline}
+            potentialReward={meta.potentialReward}
+            status={meta.status}
+            proofRequired={meta.proofRequired}
+            location={meta.location}
+            claimUrl={meta.claimUrl}
+          />
+
           <!-- Hero Image -->
           {meta.heroImage && (
             <figure class="mb-8">
@@ -282,6 +303,51 @@ const structuredData: Record<string, unknown> = {
               </div>
             )}
           </div>
+
+          <SettlementFAQ
+            caseName={meta.caseName}
+            settlementAmount={meta.totalAmount}
+            potentialReward={meta.potentialReward}
+            claimDeadline={meta.claimDeadline}
+            claimUrl={meta.claimUrl}
+            proofRequired={meta.proofRequired}
+            title={article.title}
+          />
+
+          <SimilarSettlements currentSlug={slug!} category={displayCategory} />
+
+          <CategoryCrossLinks currentCategory={displayCategory} />
+
+          <!-- Contextual links (brand, state, open settlements) -->
+          {(brandSlug || stateName) && (
+            <div class="mt-8 pt-6 border-t border-gray-200">
+              <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Related Pages</h3>
+              <div class="flex flex-wrap gap-2">
+                {brandSlug && (
+                  <a
+                    href={`/brand/${brandSlug}`}
+                    class="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-navy-600 hover:text-white text-gray-700 text-sm font-medium rounded-full transition-colors"
+                  >
+                    All {brandName} Settlements
+                  </a>
+                )}
+                {stateSlug && stateName && (
+                  <a
+                    href={`/state/${stateSlug}`}
+                    class="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-navy-600 hover:text-white text-gray-700 text-sm font-medium rounded-full transition-colors"
+                  >
+                    {stateName} Settlements
+                  </a>
+                )}
+                <a
+                  href="/open-class-action-settlements"
+                  class="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-navy-600 hover:text-white text-gray-700 text-sm font-medium rounded-full transition-colors"
+                >
+                  Open Settlements
+                </a>
+              </div>
+            </div>
+          )}
 
           <!-- Back link -->
           <div class="mt-12 pt-8 border-t border-gray-200">

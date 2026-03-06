@@ -1,0 +1,42 @@
+---
+/**
+ * Category intro text for hub pages.
+ * Maps category slugs to descriptive introductions.
+ * Add or update text here as content is created.
+ */
+
+interface Props {
+  slug: string;
+  categoryName: string;
+}
+
+const { slug, categoryName } = Astro.props;
+
+const introText: Record<string, string> = {
+  stocks:
+    'Securities class action lawsuits allow investors to recover losses caused by fraud, misleading financial disclosures, or other violations of securities laws. If a company artificially inflated its stock price or withheld material information, shareholders who suffered financial harm may be eligible for compensation through a class action settlement. These cases often involve publicly traded companies and are filed under federal securities laws. Browse the latest stock and securities settlements below to see if you qualify for a payout.',
+
+  'personal-injury':
+    'Personal injury class actions address situations where defective products, unsafe environments, or negligent practices cause widespread physical harm. These settlements cover everything from contaminated consumer products to hazardous workplace conditions. If you were injured by a product or practice that is the subject of a class action lawsuit, you may be entitled to compensation without needing to file an individual lawsuit. Review the latest personal injury settlements to learn more about your options.',
+
+  'product-recalls':
+    'Product recall class action settlements arise when manufacturers, distributors, or retailers sell defective or dangerous products to consumers. These cases may involve faulty appliances, contaminated food, unsafe vehicles, or defective electronics. When a product recall leads to a class action settlement, affected consumers can typically file a claim for a refund, replacement, or monetary compensation. Check below for open product recall settlements.',
+
+  'drugs-pharmacy':
+    'Pharmaceutical class action lawsuits target drug manufacturers, pharmacies, and healthcare companies that cause harm through dangerous medications, deceptive marketing, or overcharging practices. These settlements may cover side effects from prescription drugs, generic drug price-fixing schemes, or misleading health claims. If you have been affected by a pharmaceutical product that is the subject of a class action, you may be eligible to file a claim and receive compensation.',
+
+  financial:
+    'Financial class action settlements address wrongdoing by banks, credit card companies, lenders, insurance companies, and other financial institutions. Common issues include hidden fees, unfair lending practices, data breaches exposing financial information, and violations of consumer protection laws. If a financial institution overcharged you or engaged in deceptive practices, you may qualify for a settlement payout. Browse the current financial class action settlements below.',
+
+  'online-privacy':
+    'Online privacy class action lawsuits hold companies accountable for data breaches, unauthorized data collection, tracking without consent, and other violations of digital privacy rights. As technology companies collect more personal information, these cases have become increasingly common. If your personal data was compromised or misused by a company subject to a class action settlement, you may be entitled to compensation. Review open privacy settlements below.',
+};
+
+const text = introText[slug] ?? null;
+---
+
+{text && (
+  <div class="prose-article text-gray-600 leading-relaxed mb-8 max-w-3xl">
+    <p>{text}</p>
+  </div>
+)}

@@ -3,7 +3,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import { siteConfig } from '../site.config';
 ---
 
-<BaseLayout title="Disclaimer" description="Legal disclaimer for Class Action News & Settlements.">
+<BaseLayout title="Disclaimer" description="Legal disclaimer for Class Action News & Settlements." breadcrumbs={[{ name: 'Home', url: '/' }, { name: 'Disclaimer', url: '/disclaimer' }]}>
   <section class="bg-white py-12 lg:py-16">
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
       <h1 class="text-4xl font-heading font-black text-gray-900 mb-2">Disclaimer</h1>

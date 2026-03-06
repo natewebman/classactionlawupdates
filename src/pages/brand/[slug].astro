@@ -1,0 +1,172 @@
+---
+export const prerender = false;
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import CategoryCrossLinks from '../../components/CategoryCrossLinks.astro';
+import { getAllSettlements, getArticles } from '../../lib/supabase';
+import { extractBrands, toSlug } from '../../lib/brand-state-extraction';
+import { siteConfig } from '../../site.config';
+import { getCollectionPage } from '../../lib/structured-data';
+
+const { slug } = Astro.params;
+
+// Fetch all settlements and extract brands
+const allSettlements = await getAllSettlements({ limit: 500 });
+const brandsMap = extractBrands(allSettlements);
+
+const brandData = brandsMap.get(slug!);
+if (!brandData) {
+  return Astro.redirect('/settlements');
+}
+
+const { name: brandName, articles: brandArticles } = brandData;
+
+// Separate settlements from news
+const settlements = brandArticles.filter(
+  (a) => a.news_type === 'settlement' || (a.category && a.category !== 'General')
+);
+const news = brandArticles.filter(
+  (a) => a.news_type !== 'settlement' && (!a.category || a.category === 'General')
+);
+
+// Also check for related news articles by searching titles
+const allNews = await getArticles({ limit: 100 });
+const relatedNews = allNews
+  .filter(
+    (a) =>
+      a.title.toLowerCase().includes(brandName.toLowerCase()) &&
+      !brandArticles.some((ba) => ba.slug === a.slug)
+  )
+  .slice(0, 6);
+const combinedNews = [...news, ...relatedNews].slice(0, 6);
+
+// Determine categories this brand spans
+const categories = [...new Set(brandArticles.map((a) => a.category).filter(Boolean))];
+
+const pageUrl = `https://${siteConfig.domain}/brand/${slug}`;
+const pageTitle = `${brandName} Class Action Settlements & Lawsuits`;
+const pageDescription = `Browse class action lawsuits and settlements involving ${brandName}. Check if you qualify for compensation and learn how to file a claim.`;
+
+const collectionSchema = getCollectionPage({
+  name: pageTitle,
+  description: pageDescription,
+  url: pageUrl,
+  numberOfItems: brandArticles.length,
+  mainEntity: brandArticles.slice(0, 20).map((a) => ({
+    '@type': 'Article',
+    url: `https://${siteConfig.domain}/settlements/${a.slug}`,
+  })),
+});
+
+const breadcrumbs = [
+  { name: 'Home', url: '/' },
+  { name: 'Settlements', url: '/settlements' },
+  { name: brandName, url: `/brand/${slug}` },
+];
+---
+
+<BaseLayout title={pageTitle} description={pageDescription} breadcrumbs={breadcrumbs}>
+  <script type="application/ld+json" set:html={JSON.stringify(collectionSchema)} />
+
+  <section class="bg-white py-12 lg:py-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="mb-10">
+        <a href="/settlements" class="inline-flex items-center gap-1 text-navy-600 text-sm font-medium hover:text-navy-800 mb-4">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
+          </svg>
+          All Settlements
+        </a>
+        <h1 class="text-4xl lg:text-5xl font-heading font-black text-gray-900">{brandName} Settlements & Lawsuits</h1>
+        <p class="text-gray-500 mt-3 text-lg max-w-3xl">
+          {brandArticles.length} class action {brandArticles.length === 1 ? 'case' : 'cases'} involving {brandName}. Review each settlement to see if you qualify for a payout.
+        </p>
+      </div>
+
+      <!-- Intro -->
+      <div class="prose-article text-gray-600 leading-relaxed mb-10 max-w-3xl">
+        <p>
+          Class action lawsuits against {brandName} may entitle affected consumers, investors, or employees to financial compensation. These cases typically arise from alleged misconduct including product defects, data breaches, deceptive business practices, or securities violations. Review the settlements and lawsuits below to determine if you are eligible to file a claim.
+        </p>
+      </div>
+
+      <!-- Category tags -->
+      {categories.length > 0 && (
+        <div class="flex flex-wrap gap-2 mb-8">
+          {categories.map((cat) => {
+            const catSlug = cat!.toLowerCase().replace(/[\s&\/]+/g, '-').replace(/--+/g, '-');
+            return (
+              <a
+                href={`/category/${catSlug}`}
+                class="inline-block px-3 py-1 bg-gray-100 hover:bg-navy-600 hover:text-white text-gray-600 text-sm font-medium rounded-full transition-colors"
+              >
+                {cat}
+              </a>
+            );
+          })}
+        </div>
+      )}
+
+      <!-- Settlements Grid -->
+      {settlements.length > 0 && (
+        <div class="mb-12">
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-6">Settlements</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {settlements.map((article) => (
+              <ArticleCard
+                title={article.title}
+                slug={article.slug}
+                category={article.category}
+                metaDescription={article.meta_description}
+                publishedAt={article.published_at}
+                heroImage={article.hero_image}
+                heroImageAlt={article.hero_image_alt}
+                basePath="/settlements"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <!-- Related News -->
+      {combinedNews.length > 0 && (
+        <div class="mb-12">
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-6">Related News</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {combinedNews.map((article) => (
+              <ArticleCard
+                title={article.title}
+                slug={article.slug}
+                newsType={article.news_type}
+                metaDescription={article.meta_description}
+                publishedAt={article.published_at}
+                heroImage={article.hero_image}
+                heroImageAlt={article.hero_image_alt}
+                basePath="/news"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <!-- Open Settlements CTA -->
+      <div class="mt-8 bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
+        <h2 class="text-lg font-heading font-bold text-gray-900 mb-2">Looking for more settlements?</h2>
+        <p class="text-gray-500 text-sm mb-4">Browse all currently open class action settlements you can claim.</p>
+        <a
+          href="/open-class-action-settlements"
+          class="inline-flex items-center gap-2 px-5 py-2.5 bg-navy-600 hover:bg-navy-700 text-white font-semibold rounded-lg transition-colors text-sm"
+        >
+          View Open Settlements
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+          </svg>
+        </a>
+      </div>
+
+      <CategoryCrossLinks />
+    </div>
+  </section>
+</BaseLayout>

@@ -129,6 +129,54 @@ export async function getAllArticleSlugs(): Promise<string[]> {
   return (data ?? []).map((a) => a.slug);
 }
 
+/**
+ * Fetch open settlements — active status or claim_deadline >= today.
+ * Sorted by nearest deadline first, then newest.
+ */
+export async function getOpenSettlements(opts?: { limit?: number }): Promise<Article[]> {
+  const siteId = await getSiteId();
+  const today = new Date().toISOString().split('T')[0];
+
+  // Settlements where status is active-like or deadline hasn't passed
+  const { data, error } = await supabase
+    .from('articles')
+    .select('*')
+    .eq('site_id', siteId)
+    .eq('content_stage', 'published')
+    .or(`case_status.in.(active,open,approved,paying),claim_deadline.gte.${today}`)
+    .order('claim_deadline', { ascending: true, nullsFirst: false })
+    .order('published_at', { ascending: false })
+    .limit(opts?.limit ?? 100);
+
+  if (error) {
+    console.error('Error fetching open settlements:', error);
+    return [];
+  }
+  return data ?? [];
+}
+
+/**
+ * Fetch all published settlements (news_type = 'settlement' OR category is non-null and non-General).
+ * Used for brand/state extraction at build time.
+ */
+export async function getAllSettlements(opts?: { limit?: number }): Promise<Article[]> {
+  const siteId = await getSiteId();
+  const { data, error } = await supabase
+    .from('articles')
+    .select('*')
+    .eq('site_id', siteId)
+    .eq('content_stage', 'published')
+    .not('category', 'is', null)
+    .order('published_at', { ascending: false })
+    .limit(opts?.limit ?? 500);
+
+  if (error) {
+    console.error('Error fetching all settlements:', error);
+    return [];
+  }
+  return data ?? [];
+}
+
 // ---------- Subscribers ----------
 
 export async function addSubscriber(fields: {

@@ -4,13 +4,18 @@ import Hero from '../components/Hero.astro';
 import ArticleCard from '../components/ArticleCard.astro';
 import SignupForm from '../components/SignupForm.astro';
 import { getArticles } from '../lib/supabase';
+import { getWebSite } from '../lib/structured-data';
 
 // Fetch latest published articles for the homepage grid
 const latestSettlements = await getArticles({ limit: 6 });
 const latestNews = await getArticles({ newsType: 'case-filings', limit: 3 });
+
+const websiteSchema = getWebSite();
 ---
 
 <BaseLayout>
+  <script type="application/ld+json" set:html={JSON.stringify(websiteSchema)} />
+
   <Hero />
 
   <!-- Top Open Class Actions -->
@@ -56,9 +61,18 @@ const latestNews = await getArticles({ newsType: 'case-filings', limit: 3 });
         </div>
       )}
 
-      <div class="mt-8 text-center sm:hidden">
-        <a href="/settlements" class="btn-navy">
-          View All Settlements
+      <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="/open-class-action-settlements" class="inline-flex items-center gap-2 px-5 py-2.5 bg-navy-600 hover:bg-navy-700 text-white font-semibold rounded-lg transition-colors text-sm">
+          View Open Settlements
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+          </svg>
+        </a>
+        <a href="/settlements" class="inline-flex items-center gap-1 text-navy-600 font-semibold hover:text-navy-800 transition-colors text-sm">
+          Browse All Settlements
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+          </svg>
         </a>
       </div>
     </div>

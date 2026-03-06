@@ -1,0 +1,136 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { siteConfig } from '../site.config';
+
+const breadcrumbs = [
+  { name: 'Home', url: '/' },
+  { name: 'Editorial Policy', url: '/editorial-policy' },
+];
+---
+
+<BaseLayout
+  title="Editorial Policy"
+  description="Our editorial standards for researching, fact-checking, and updating class action settlement articles. Learn how we ensure accuracy and transparency."
+  breadcrumbs={breadcrumbs}
+>
+
+  <article class="bg-white">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+      <!-- Breadcrumbs -->
+      <nav class="mb-8">
+        <ol class="flex items-center gap-1.5 text-sm text-gray-500">
+          <li><a href="/" class="hover:text-navy-600 transition-colors">Home</a></li>
+          <li><span class="mx-1">&gt;</span></li>
+          <li class="text-gray-700">Editorial Policy</li>
+        </ol>
+      </nav>
+
+      <h1 class="text-4xl sm:text-5xl font-heading font-black text-gray-900 mb-8">
+        Editorial Policy
+      </h1>
+
+      <div class="prose-article text-lg leading-relaxed space-y-10">
+        <p class="text-xl text-gray-600">
+          At {siteConfig.name}, we hold ourselves to high editorial standards. Consumers rely on our content to make decisions about filing claims, and we take that responsibility seriously. This page explains how we research, verify, publish, and maintain our content.
+        </p>
+
+        <!-- Research Process -->
+        <section>
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">How We Research</h2>
+          <p>
+            Every article begins with primary source research. We draw our information from:
+          </p>
+          <ul class="list-disc pl-6 space-y-2">
+            <li><strong>Court filings and docket records</strong> — including complaints, settlement agreements, preliminary and final approval orders, and class certification documents.</li>
+            <li><strong>Settlement administrator websites</strong> — official sites set up to manage the claims process, which contain eligibility details, claim forms, deadlines, and FAQs.</li>
+            <li><strong>Public legal databases</strong> — federal and state court records, PACER filings, and published court opinions.</li>
+            <li><strong>Regulatory filings</strong> — SEC filings for securities settlements, FDA actions for pharmaceutical cases, and FTC enforcement actions for consumer protection matters.</li>
+            <li><strong>Established legal news outlets</strong> — reporting from recognized legal publications to provide context and background on ongoing litigation.</li>
+          </ul>
+          <p>
+            We do not publish settlement information that cannot be traced back to a verifiable source. If a settlement's details cannot be confirmed through official channels, we do not cover it.
+          </p>
+        </section>
+
+        <!-- Fact-Checking -->
+        <section>
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">Fact-Checking Process</h2>
+          <p>
+            Before any article is published, it goes through a structured verification process:
+          </p>
+          <ol class="list-decimal pl-6 space-y-3">
+            <li>
+              <strong>Source verification</strong> — All factual claims are checked against the original source material. Settlement amounts, deadlines, and eligibility criteria must match what appears in official court documents or administrator records.
+            </li>
+            <li>
+              <strong>Cross-referencing</strong> — Key details are verified across multiple independent sources when possible. If a claim deadline appears on the administrator's website, we confirm it against the court's order.
+            </li>
+            <li>
+              <strong>Data validation</strong> — Numerical data like settlement amounts, payout ranges, and class sizes are verified for consistency and accuracy.
+            </li>
+            <li>
+              <strong>Link verification</strong> — All external links, especially claim form URLs and settlement administrator websites, are verified to be active and pointing to the correct destination.
+            </li>
+          </ol>
+          <p>
+            Articles that do not pass our fact-checking process are not published. If verification reveals inaccuracies in the initial draft, the article is corrected and re-verified before publication.
+          </p>
+        </section>
+
+        <!-- Update Policy -->
+        <section>
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">Update Policy</h2>
+          <p>
+            Class action cases are not static — deadlines extend, settlement amounts change, courts issue new rulings, and claims processes evolve. We actively monitor published articles and update them when:
+          </p>
+          <ul class="list-disc pl-6 space-y-2">
+            <li><strong>Deadlines change</strong> — If a court extends or modifies a claim filing deadline, we update the article to reflect the new date.</li>
+            <li><strong>Settlement amounts are revised</strong> — When final distributions differ from preliminary estimates, or when courts approve modified settlement terms, we update the financial details.</li>
+            <li><strong>Case status changes</strong> — As cases move through stages (filing, certification, preliminary approval, final approval, distribution), we update the status and any relevant details.</li>
+            <li><strong>New information emerges</strong> — If additional eligibility criteria, payout information, or procedural requirements come to light, we incorporate them into existing articles.</li>
+          </ul>
+          <p>
+            When an article is substantively updated, we display a "Last Updated" date so readers can see how recently the information was reviewed. Minor editorial corrections (typos, formatting) do not trigger a date change.
+          </p>
+        </section>
+
+        <!-- Corrections Policy -->
+        <section>
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">Corrections Policy</h2>
+          <p>
+            We strive for accuracy, but if an error is identified in a published article, we correct it promptly. Our approach:
+          </p>
+          <ul class="list-disc pl-6 space-y-2">
+            <li><strong>Factual errors</strong> — Incorrect settlement amounts, deadlines, eligibility details, or case information are corrected as soon as they are identified. The "Last Updated" date is changed to reflect the correction.</li>
+            <li><strong>Broken links</strong> — If a claim form URL or settlement website link becomes inactive, we update or remove it and note the change.</li>
+            <li><strong>Reader reports</strong> — We welcome corrections from readers. If you spot an error in any of our articles, please contact us at the address below so we can investigate and correct it.</li>
+          </ul>
+        </section>
+
+        <!-- Disclosure -->
+        <section>
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">Independence &amp; Disclosure</h2>
+          <p>
+            {siteConfig.name} is an independent publication. We are not affiliated with any law firm, settlement administrator, or defendant in any case we cover. Our content is produced for informational purposes and does not constitute legal advice. Consumers should consult a qualified attorney for advice specific to their situation.
+          </p>
+        </section>
+
+        <!-- Contact -->
+        <section>
+          <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">Contact</h2>
+          <p>
+            To report an error, suggest a correction, or provide a tip about a settlement we should cover:
+          </p>
+          <address class="not-italic mt-4 text-gray-700">
+            <strong>{siteConfig.name}</strong><br />
+            {siteConfig.contact.address}<br />
+            {siteConfig.contact.city}, {siteConfig.contact.state} {siteConfig.contact.zip}
+          </address>
+          <p class="mt-4">
+            <a href="/about" class="text-blue-600 hover:text-blue-800 transition-colors font-semibold">Learn more about our team &rarr;</a>
+          </p>
+        </section>
+      </div>
+    </div>
+  </article>
+</BaseLayout>

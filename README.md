@@ -4,7 +4,7 @@ A class action lawsuit news and settlement tracker that automatically generates,
 
 ## Tech Stack
 
-- **Framework:** [Astro](https://astro.build/) 5.7 (static site generation)
+- **Framework:** [Astro](https://astro.build/) 5.7 (static + SSR hybrid)
 - **Styling:** Tailwind CSS 3.4
 - **Database:** [Supabase](https://supabase.com/) (PostgreSQL + Storage)
 - **Hosting:** Cloudflare Pages
@@ -16,6 +16,7 @@ A class action lawsuit news and settlement tracker that automatically generates,
 npm install
 cp .env.example .env   # Fill in your Supabase keys
 npm run dev             # http://localhost:4321
+npm run validate:seo    # Run SEO validation checks
 ```
 
 ## Project Structure
@@ -23,36 +24,158 @@ npm run dev             # http://localhost:4321
 ```
 src/
   pages/
-    index.astro              # Homepage — top settlements + latest news
-    settlements/             # Settlement listing + [slug] detail pages
-    news/                    # News listing + [slug] detail pages
-    category/[slug].astro    # Category filter page
-    attorney-portal.astro    # Attorney portal
-    subscribe.astro          # Newsletter subscription
-    login.astro / signup.astro
+    index.astro                          # Homepage — top settlements + latest news
+    settlements/                         # Settlement listing + [slug] detail pages (SSR)
+    news/                                # News listing + [slug] detail pages (SSR)
+    category/[slug].astro                # Category hub pages (prerendered)
+    brand/[slug].astro                   # Brand settlement pages (SSR)
+    state/[slug].astro                   # State settlement pages (SSR)
+    open-class-action-settlements.astro  # Open settlements landing page (SSR)
+    about.astro                          # About page
+    editorial-policy.astro               # Editorial policy page
+    attorney-portal.astro                # Attorney portal
+    subscribe.astro / signup.astro / login.astro
     privacy-policy / terms / disclaimer
+    sitemap-articles.xml.ts              # Dynamic XML sitemap for SSR pages (SSR)
+    api/
+      content-stats.ts                   # Content statistics JSON endpoint (SSR)
   components/
-    Header.astro             # Site navigation
-    Footer.astro             # Footer links
-    Hero.astro               # Homepage hero banner
-    ArticleCard.astro        # Article preview card
-    SignupForm.astro         # Email signup form
-    ClaimDetailsSidebar.astro # Settlement claim info sidebar
-    SettlementSidebar.astro  # Settlement details sidebar
-    CaseStatusTracker.astro  # Visual case status tracker
-    RelatedArticles.astro    # Related articles widget
+    Header.astro                # Site navigation
+    Footer.astro                # Footer links (reads quickLinks from site.config)
+    Hero.astro                  # Homepage hero banner
+    ArticleCard.astro           # Article preview card
+    SignupForm.astro            # Email signup form
+    SettlementDataBlock.astro   # Settlement metadata summary card
+    SettlementFAQ.astro         # Auto-generated FAQ section with schema
+    SettlementSidebar.astro     # Settlement details sidebar
+    CaseStatusTracker.astro     # Visual case status tracker
+    SimilarSettlements.astro    # Same-category settlements sorted by amount
+    LargestSettlements.astro    # Top-5 settlements by amount table
+    RelatedArticles.astro       # Related articles widget (same-category priority)
+    CategoryIntro.astro         # Category hub intro text
+    CategoryCrossLinks.astro    # Cross-links to related category hubs
+    ClaimDetailsSidebar.astro   # Settlement claim info sidebar
+  layouts/
+    BaseLayout.astro            # Base layout with Organization + BreadcrumbList JSON-LD
   lib/
-    supabase.ts              # Supabase client + data fetching helpers
+    supabase.ts                 # Supabase client + data fetching helpers
+    structured-data.ts          # JSON-LD schema generators
+    seo-helpers.ts              # Title formatting, date helpers, heading utilities
+    settlement-amount.ts        # Settlement amount parsing and sorting
+    brand-state-extraction.ts   # Brand/company and US state extraction from articles
+  site.config.ts                # Site identity, branding, categories, nav links
+  styles/
+    global.css                  # Tailwind + custom styles
+public/
+  robots.txt                    # Crawl directives + sitemap references
+  _headers                      # Cloudflare headers (AI content signals)
 scripts/
-  generate_content.py        # General article generation
-  generate_settlements.py    # Settlement-focused generation
-  review_pipeline.py         # Fact-check, update, rewrite pipeline
-  generate-missing-images.ts # Hero image generation (DALL-E 3)
-  prompts/                   # LLM prompt templates
+  generate_content.py           # General article generation
+  generate_settlements.py       # Settlement-focused generation
+  review_pipeline.py            # Fact-check, update, rewrite pipeline
+  generate-missing-images.ts    # Hero image generation (DALL-E 3)
+  validate-seo.mjs             # SEO validation script (54 checks)
+  prompts/                      # LLM prompt templates
   lib/
-    generate-image.ts        # DALL-E 3 image generation utilities
-    dedup.py                 # Keyword-based duplicate detection
+    generate-image.ts           # DALL-E 3 image generation utilities
+    dedup.py                    # Keyword-based duplicate detection
 ```
+
+## SEO Architecture
+
+### Structured Data (JSON-LD)
+
+Generated by `src/lib/structured-data.ts`:
+
+| Schema | Where Used |
+|--------|-----------|
+| Organization | Every page (via BaseLayout) |
+| BreadcrumbList | Every page with `breadcrumbs` prop (via BaseLayout) |
+| WebSite | Homepage |
+| Article | Settlement detail pages |
+| NewsArticle | News detail pages |
+| FAQPage | Settlement detail pages (via SettlementFAQ) |
+| CollectionPage | Category hubs, brand pages, state pages |
+| ItemList | Open settlements page |
+
+### Sitemaps
+
+Two sitemaps work together:
+
+1. **`/sitemap-index.xml`** — auto-generated by `@astrojs/sitemap` for prerendered pages (homepage, category hubs, about, editorial-policy, etc.)
+2. **`/sitemap-articles.xml`** — custom SSR endpoint (`src/pages/sitemap-articles.xml.ts`) for dynamic pages:
+   - All article pages (`/settlements/{slug}`, `/news/{slug}`) — priority 0.6, weekly
+   - Open settlements page — priority 0.8, daily
+   - Brand pages (`/brand/{slug}`) — priority 0.8, daily
+   - State pages (`/state/{slug}`) — priority 0.8, daily
+
+Both are referenced in `public/robots.txt`.
+
+### Crawl Configuration
+
+- **robots.txt** — allows all crawlers, blocks /login, /signup, /subscribe. Includes AI bot directives (GPTBot, ClaudeBot, Google-Extended, Applebot-Extended).
+- **_headers** — sets `X-Robots-Tag: ai-train=no, ai-input=yes` on all pages via Cloudflare.
+
+### Internal Link Architecture
+
+```
+Homepage
+  ├── /settlements (index)
+  ├── /news (index)
+  ├── /open-class-action-settlements
+  └── /category/{slug} (6 hub pages)
+
+/settlements/{slug} (detail page)
+  ├── /category/{slug} (category badge link)
+  ├── /brand/{slug} (contextual link)
+  ├── /state/{slug} (contextual link)
+  ├── /open-class-action-settlements (contextual link)
+  ├── SimilarSettlements → /settlements/{slug}
+  └── CategoryCrossLinks → /category/{slug}
+
+/news/{slug} (detail page)
+  ├── /category/{slug} (category badge link, when matching)
+  ├── RelatedArticles → /settlements/{slug} or /news/{slug}
+  └── CategoryCrossLinks → /category/{slug}
+
+/category/{slug} (hub pages)
+  ├── CategoryIntro (descriptive content)
+  ├── LargestSettlements → /settlements/{slug}
+  ├── All Settlements grid → /settlements/{slug}
+  ├── Latest News grid → /news/{slug}
+  ├── /open-class-action-settlements (CTA)
+  └── CategoryCrossLinks → /category/{slug}
+
+/brand/{slug} → /settlements/{slug}, /news/{slug}, /category/{slug}
+/state/{slug} → /settlements/{slug}, /category/{slug}
+/open-class-action-settlements → /settlements/{slug}, /news/{slug}
+
+Footer → /open-class-action-settlements, /about, /editorial-policy, all categories
+```
+
+### SEO Validation
+
+Run `npm run validate:seo` to check 54 SEO requirements across all page templates:
+
+- Article structured data (Article, NewsArticle, FAQPage schemas)
+- Organization schema on all pages
+- BreadcrumbList support
+- Settlement data block with deadline proximity logic
+- Sitemap and robots.txt configuration
+- Internal link structure (category links, cross-links, similar settlements)
+- Category hub components (intro, largest settlements, CollectionPage schema)
+- High-intent landing pages (open settlements, brand, state)
+- Brand/state extraction module
+- Sitemap inclusion of all page types
+
+### Page Rendering
+
+| Page | Rendering | Notes |
+|------|-----------|-------|
+| Homepage, category hubs, about, editorial-policy, static pages | Prerendered | Built at deploy time |
+| Settlement detail, news detail, news index | SSR | Fetches from Supabase at request time |
+| Open settlements, brand pages, state pages | SSR | Dynamic data from Supabase |
+| Sitemap articles, content stats API | SSR | Dynamic XML/JSON endpoints |
 
 ## Content Pipeline
 
@@ -87,7 +210,7 @@ The pipeline runs via two GitHub Actions workflows:
 - **Generate Content** (`generate-content.yml`) — general news articles, runs daily at 12:00 UTC + manual trigger
 - **Generate Settlements** (`generate-settlements.yml`) — settlement-specific articles, manual trigger only
 
-Both accept inputs for article count, model, categories, and optional topic URL/idea.
+Both accept inputs for article count, model, and categories. Generate Content also accepts `generation_mode` (batch/standard) and `prompt_version`. Generate Settlements also accepts an optional `topic_url` or `topic_idea` to target a specific case.
 
 ## Environment Variables
 
@@ -113,14 +236,24 @@ Both accept inputs for article count, model, categories, and optional topic URL/
 | `ADMIN_SUPABASE_KEY` | Admin tracking database key (optional) |
 | `DEPLOY_HOOK_URL` | Cloudflare Pages deploy hook URL |
 
+## Multi-tenant Data Model
+
+All data is scoped by `site_id`. The `sites` table maps a `site_key` to a UUID `site_id`. At build time, `PUBLIC_SITE_KEY` resolves the site and filters all queries. To replicate this site for a different domain, create a new row in the `sites` table with a unique `site_key` and update `site.config.ts`.
+
+### Supabase tables
+- `sites` — site registry (site_key, id, deploy_hook_url)
+- `articles` — all content (news + settlements), filtered by `content_stage` and `news_type`
+- `subscribers` — email signups (upsert on site_id + email)
+- `submissions` — form submissions (attorney portal, etc.)
+
 ## Content Categories
 
-- Stocks & Securities
+- Stocks
 - Personal Injury
 - Product Recalls
 - Drugs & Pharmacy
 - Financial
-- Online Privacy
+- Online/Privacy
 
 ## Deploy
 

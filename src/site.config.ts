@@ -57,7 +57,10 @@ export const siteConfig = {
   quickLinks: [
     { name: 'Home', href: '/' },
     { name: 'Browse Settlements', href: '/settlements' },
+    { name: 'Open Settlements', href: '/open-class-action-settlements' },
     { name: 'Latest News', href: '/news' },
+    { name: 'About', href: '/about' },
+    { name: 'Editorial Policy', href: '/editorial-policy' },
     { name: 'Join as Member', href: '/signup' },
     { name: 'For Attorneys', href: '/attorney-portal' },
   ],

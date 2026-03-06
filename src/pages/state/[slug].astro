@@ -1,0 +1,138 @@
+---
+export const prerender = false;
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import CategoryCrossLinks from '../../components/CategoryCrossLinks.astro';
+import { getAllSettlements } from '../../lib/supabase';
+import { extractStates, US_STATES } from '../../lib/brand-state-extraction';
+import { siteConfig } from '../../site.config';
+import { getCollectionPage } from '../../lib/structured-data';
+
+const { slug } = Astro.params;
+
+// Validate this is a real US state slug
+const stateName = US_STATES[slug!];
+if (!stateName) {
+  return Astro.redirect('/settlements');
+}
+
+// Fetch all settlements and extract state mappings
+const allSettlements = await getAllSettlements({ limit: 500 });
+const statesMap = extractStates(allSettlements);
+
+const stateData = statesMap.get(slug!);
+const articles = stateData?.articles ?? [];
+
+// Gather categories represented
+const categories = [...new Set(articles.map((a) => a.category).filter(Boolean))];
+
+const pageUrl = `https://${siteConfig.domain}/state/${slug}`;
+const pageTitle = `${stateName} Class Action Settlements & Lawsuits`;
+const pageDescription = `Browse class action lawsuits and settlements in ${stateName}. Find open claims, eligibility requirements, and deadlines for ${stateName} residents.`;
+
+const collectionSchema = getCollectionPage({
+  name: pageTitle,
+  description: pageDescription,
+  url: pageUrl,
+  numberOfItems: articles.length,
+  mainEntity: articles.slice(0, 20).map((a) => ({
+    '@type': 'Article',
+    url: `https://${siteConfig.domain}/settlements/${a.slug}`,
+  })),
+});
+
+const breadcrumbs = [
+  { name: 'Home', url: '/' },
+  { name: 'Settlements', url: '/settlements' },
+  { name: stateName, url: `/state/${slug}` },
+];
+---
+
+<BaseLayout title={pageTitle} description={pageDescription} breadcrumbs={breadcrumbs}>
+  <script type="application/ld+json" set:html={JSON.stringify(collectionSchema)} />
+
+  <section class="bg-white py-12 lg:py-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="mb-10">
+        <a href="/settlements" class="inline-flex items-center gap-1 text-navy-600 text-sm font-medium hover:text-navy-800 mb-4">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
+          </svg>
+          All Settlements
+        </a>
+        <h1 class="text-4xl lg:text-5xl font-heading font-black text-gray-900">{stateName} Class Action Settlements</h1>
+        <p class="text-gray-500 mt-3 text-lg max-w-3xl">
+          {articles.length > 0
+            ? `${articles.length} class action ${articles.length === 1 ? 'settlement' : 'settlements'} involving ${stateName}. Review each case to determine if you qualify for compensation.`
+            : `No class action settlements currently associated with ${stateName}. Check back regularly as new cases are added.`}
+        </p>
+      </div>
+
+      <!-- Intro -->
+      <div class="prose-article text-gray-600 leading-relaxed mb-10 max-w-3xl">
+        <p>
+          Residents of {stateName} may be eligible for compensation through various class action settlements. These cases can involve product liability, consumer fraud, data breaches, securities violations, and other claims. Many class action settlements are available to consumers nationwide, but some are specific to {stateName} or include enhanced benefits for state residents. Browse the available settlements below and check your eligibility.
+        </p>
+      </div>
+
+      <!-- Category quick links -->
+      {categories.length > 0 && (
+        <div class="flex flex-wrap gap-2 mb-8">
+          {categories.map((cat) => {
+            const catSlug = cat!.toLowerCase().replace(/[\s&\/]+/g, '-').replace(/--+/g, '-');
+            return (
+              <a
+                href={`/category/${catSlug}`}
+                class="inline-block px-3 py-1 bg-gray-100 hover:bg-navy-600 hover:text-white text-gray-600 text-sm font-medium rounded-full transition-colors"
+              >
+                {cat}
+              </a>
+            );
+          })}
+        </div>
+      )}
+
+      <!-- Settlements Grid -->
+      {articles.length > 0 ? (
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {articles.map((article) => (
+            <ArticleCard
+              title={article.title}
+              slug={article.slug}
+              category={article.category}
+              metaDescription={article.meta_description}
+              publishedAt={article.published_at}
+              heroImage={article.hero_image}
+              heroImageAlt={article.hero_image_alt}
+              basePath="/settlements"
+            />
+          ))}
+        </div>
+      ) : (
+        <div class="text-center py-16 bg-gray-50 rounded-2xl border border-gray-100">
+          <p class="text-gray-500 font-semibold text-lg">No settlements in {stateName} at this time.</p>
+          <p class="text-gray-400 mt-1">Browse all open settlements below.</p>
+        </div>
+      )}
+
+      <!-- Open Settlements CTA -->
+      <div class="mt-12 bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
+        <h2 class="text-lg font-heading font-bold text-gray-900 mb-2">Browse All Open Settlements</h2>
+        <p class="text-gray-500 text-sm mb-4">Many class action settlements are available nationwide, not just in {stateName}.</p>
+        <a
+          href="/open-class-action-settlements"
+          class="inline-flex items-center gap-2 px-5 py-2.5 bg-navy-600 hover:bg-navy-700 text-white font-semibold rounded-lg transition-colors text-sm"
+        >
+          View All Open Settlements
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+          </svg>
+        </a>
+      </div>
+
+      <CategoryCrossLinks />
+    </div>
+  </section>
+</BaseLayout>

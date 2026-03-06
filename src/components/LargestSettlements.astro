@@ -1,0 +1,52 @@
+---
+import type { Article } from '../lib/supabase';
+import { parseSettlementAmount, sortBySettlementAmount } from '../lib/settlement-amount';
+
+interface Props {
+  articles: Article[];
+  limit?: number;
+}
+
+const { articles, limit = 5 } = Astro.props;
+
+// Filter to articles that have a parseable settlement amount
+const withAmounts = articles.filter(
+  (a) => parseSettlementAmount(a.settlement_amount) !== null
+);
+
+// Sort by amount descending and take top N
+const largest = sortBySettlementAmount(withAmounts).slice(0, limit);
+---
+
+{largest.length > 0 && (
+  <section class="mt-12">
+    <h2 class="text-2xl font-heading font-bold text-gray-900 mb-4">Largest Settlements</h2>
+    <div class="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+      <table class="w-full text-left">
+        <thead>
+          <tr class="border-b border-gray-200 bg-gray-100">
+            <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Settlement</th>
+            <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Amount</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+          {largest.map((article) => (
+            <tr class="hover:bg-white transition-colors">
+              <td class="px-4 py-3">
+                <a
+                  href={`/settlements/${article.slug}`}
+                  class="font-semibold text-gray-900 hover:text-navy-600 transition-colors line-clamp-1"
+                >
+                  {article.title}
+                </a>
+              </td>
+              <td class="px-4 py-3 text-right whitespace-nowrap font-semibold text-gray-700">
+                {article.settlement_amount}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+)}

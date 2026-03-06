@@ -7,10 +7,12 @@
         "start": "astro dev",
         "build": "astro build",
         "preview": "astro preview",
-        "astro": "astro"
+        "astro": "astro",
+        "validate:seo": "node scripts/validate-seo.mjs"
     },
     "dependencies": {
         "@astrojs/cloudflare": "^12.0.0",
+        "@astrojs/sitemap": "^3.7.0",
         "@astrojs/tailwind": "^6.0.2",
         "@supabase/supabase-js": "^2.49.1",
         "astro": "^5.7.0",
