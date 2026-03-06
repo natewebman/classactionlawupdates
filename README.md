@@ -49,7 +49,9 @@ scripts/
   review_pipeline.py         # Fact-check, update, rewrite pipeline
   generate-missing-images.ts # Hero image generation (DALL-E 3)
   prompts/                   # LLM prompt templates
-  lib/                       # Shared TypeScript utilities
+  lib/
+    generate-image.ts        # DALL-E 3 image generation utilities
+    dedup.py                 # Keyword-based duplicate detection
 ```
 
 ## Content Pipeline
@@ -68,6 +70,15 @@ Articles are generated and published via GitHub Actions in a 4-step pipeline:
 `draft` → `fact_checked` → `fact_updated` → `published`
 
 Articles that fail fact-checking are regenerated (up to 2 retries) before being marked `failed`.
+
+### Deduplication
+
+Duplicate detection runs at two levels:
+
+1. **Prompt-level** — existing article titles and case names are sent to Perplexity with instructions to avoid researching the same cases
+2. **Post-generation** — after Claude returns an article, keyword-based Jaccard similarity is checked against all existing articles. If the new title or case name overlaps >= 40% with any existing article, it's rejected as a duplicate
+
+The dedup logic lives in `scripts/lib/dedup.py` and is shared across all 3 pipeline scripts.
 
 ### Running the pipeline
 

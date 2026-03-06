@@ -32,6 +32,10 @@ import anthropic
 import requests
 from supabase import create_client
 
+# Add scripts/lib to path for shared utilities
+sys.path.insert(0, str(Path(__file__).parent / "lib"))
+from dedup import is_duplicate, load_existing_articles
+
 
 # =============================================================================
 # CONFIG
@@ -401,24 +405,17 @@ def main():
 
     categories = pick_categories(ARTICLES_COUNT)
 
-    # Deduplication: fetch existing article titles to avoid duplicates
+    # Deduplication: fetch existing articles for both prompt-level and post-generation checks
+    existing_articles = load_existing_articles(site_db)
     existing_titles = []
-    try:
-        existing = site_db.table("articles") \
-            .select("title, case_name") \
-            .neq("content_stage", "failed") \
-            .execute()
-        if existing.data:
-            for row in existing.data:
-                if row.get("title"):
-                    existing_titles.append(row["title"])
-                if row.get("case_name"):
-                    existing_titles.append(row["case_name"])
-        existing_titles = list(set(existing_titles))
-        if existing_titles:
-            print(f"Dedup: {len(existing_titles)} existing titles/cases loaded")
-    except Exception as e:
-        print(f"WARNING: Could not load existing titles for dedup: {e}")
+    for row in existing_articles:
+        if row.get("title"):
+            existing_titles.append(row["title"])
+        if row.get("case_name"):
+            existing_titles.append(row["case_name"])
+    existing_titles = list(set(existing_titles))
+    if existing_titles:
+        print(f"Dedup: {len(existing_titles)} existing titles/cases loaded")
 
     total_input_tokens = 0
     total_output_tokens = 0
@@ -458,6 +455,7 @@ def main():
             total_output_tokens += output_tokens
 
             title = article_data.get("title", "Untitled")
+            case_name = article_data.get("case_name")
             slug = f"{article_data.get('slug') or slugify(title)}-{article_id[:8]}"
             word_count = len(article_data.get("content", "").split())
             source_url = article_data.get("source_url", "")
@@ -468,10 +466,19 @@ def main():
             print(f"  Source: {source_url[:60]}..." if len(source_url) > 60 else f"  Source: {source_url}")
             print(f"  Tokens: {input_tokens} in / {output_tokens} out")
 
+            # Post-generation duplicate check
+            if is_duplicate(title, case_name, existing_articles):
+                print(f"  ⚠ DUPLICATE detected — skipping article")
+                articles_failed += 1
+                continue
+
             write_site_article(site_db, article_id, article_data, category, site_db_site_id)
             print(f"  ✓ Site DB: written")
             articles_generated += 1
             articles_published += 1
+
+            # Add to dedup list so subsequent articles in this batch don't duplicate
+            existing_articles.append({"title": title, "case_name": case_name})
 
             if admin_conn and ADMIN_RUN_ID and site_id:
                 write_admin_run_article(admin_conn, {
