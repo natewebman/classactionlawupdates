@@ -388,9 +388,15 @@ def process_article(article: dict, site_db, admin_db, claude_client: anthropic.A
             article["content"] = new_content
 
             # Update metadata if regeneration provided it (title, slug, case_name, etc.)
+            # Only include fields that exist as columns in the articles table
+            ALLOWED_DB_FIELDS = {
+                "title", "slug", "meta_description", "case_name",
+                "settlement_amount", "claim_deadline", "case_status",
+                "claim_url", "settlement_website", "claims_administrator",
+                "class_counsel", "potential_reward", "location",
+            }
             updates = {"content_stage": "draft", "content": new_content}
-            for field in ("title", "slug", "meta_description", "case_name",
-                          "settlement_amount", "claim_deadline", "source_url"):
+            for field in ALLOWED_DB_FIELDS:
                 if regen_result.get(field):
                     updates[field] = regen_result[field]
                     article[field] = regen_result[field]
