@@ -45,8 +45,8 @@ const hasClaimDetails = claimDeadline || claimUrl || potentialReward || totalAmo
     {hasClaimDetails && (
       <div class="p-5 space-y-4">
         {claimUrl && (
-          
-           <a href={claimUrl}
+          <a
+            href={claimUrl}
             target="_blank"
             rel="noopener noreferrer"
             class="block w-full text-center px-5 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-md hover:shadow-lg"
