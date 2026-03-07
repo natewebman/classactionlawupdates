@@ -63,5 +63,6 @@ export const siteConfig = {
     { name: 'Editorial Policy', href: '/editorial-policy' },
     { name: 'Join as Member', href: '/signup' },
     { name: 'For Attorneys', href: '/attorney-portal' },
+    { name: 'Unsubscribe', href: '/unsubscribe' },
   ],
 } as const;

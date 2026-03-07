@@ -196,6 +196,7 @@ export async function addSubscriber(fields: {
       utm_source: fields.utm_source ?? null,
       utm_campaign: fields.utm_campaign ?? null,
       status: 'active',
+      unsubscribed_at: null,
     },
     { onConflict: 'site_id,email' }
   );
@@ -204,6 +205,41 @@ export async function addSubscriber(fields: {
     console.error('Error adding subscriber:', error);
     return { success: false, error: error.message };
   }
+  return { success: true };
+}
+
+export async function unsubscribeEmail(
+  email: string
+): Promise<{ success: boolean; error?: string; alreadyUnsubscribed?: boolean }> {
+  const siteId = await getSiteId();
+
+  // Look up the subscriber
+  const { data: subscriber, error: lookupErr } = await supabase
+    .from('subscribers')
+    .select('id, status')
+    .eq('site_id', siteId)
+    .eq('email', email)
+    .single();
+
+  if (lookupErr || !subscriber) {
+    return { success: false, error: "We couldn't find that email address in our system." };
+  }
+
+  if (subscriber.status === 'unsubscribed') {
+    return { success: true, alreadyUnsubscribed: true };
+  }
+
+  // Update status to unsubscribed
+  const { error: updateErr } = await supabase
+    .from('subscribers')
+    .update({ status: 'unsubscribed', unsubscribed_at: new Date().toISOString() })
+    .eq('id', subscriber.id);
+
+  if (updateErr) {
+    console.error('Error unsubscribing:', updateErr);
+    return { success: false, error: 'Something went wrong. Please try again.' };
+  }
+
   return { success: true };
 }
 

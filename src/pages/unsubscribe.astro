@@ -1,0 +1,82 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Unsubscribe" description="Unsubscribe from class action settlement alerts." noIndex={true}>
+  <section class="bg-gray-50 min-h-[70vh] flex items-center py-16">
+    <div class="max-w-md mx-auto px-4 sm:px-6 w-full">
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-heading font-black text-gray-900">Unsubscribe from Alerts</h1>
+        <p class="text-gray-500 mt-2">Enter your email address below to unsubscribe from settlement alerts.</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+        <form id="unsubscribe-form" class="space-y-5">
+          <div>
+            <label for="unsub-email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+            <input type="email" id="unsub-email" name="email" placeholder="john@example.com" required class="form-input" />
+          </div>
+
+          <button type="submit" class="w-full px-5 py-3.5 text-base font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors" id="unsub-btn">
+            Unsubscribe
+          </button>
+
+          <div id="unsub-success" class="hidden text-center py-3 px-4 bg-green-50 text-green-700 rounded-lg text-sm font-medium">
+            You've been successfully unsubscribed. You will no longer receive settlement alerts.
+          </div>
+          <div id="unsub-error" class="hidden text-center py-3 px-4 bg-red-50 text-red-700 rounded-lg text-sm font-medium">
+          </div>
+        </form>
+
+        <p class="text-center text-sm text-gray-500 mt-6">
+          Changed your mind? <a href="/signup" class="underline hover:text-gray-700">Re-subscribe</a> anytime.
+        </p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  import { unsubscribeEmail } from '../lib/supabase';
+
+  const form = document.getElementById('unsubscribe-form') as HTMLFormElement;
+  const successMsg = document.getElementById('unsub-success');
+  const errorMsg = document.getElementById('unsub-error');
+  const submitBtn = document.getElementById('unsub-btn') as HTMLButtonElement;
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    successMsg?.classList.add('hidden');
+    errorMsg?.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Unsubscribing...';
+
+    const formData = new FormData(form);
+    const email = formData.get('email') as string;
+
+    const result = await unsubscribeEmail(email);
+
+    if (!result.success) {
+      if (errorMsg) {
+        errorMsg.textContent = result.error || 'Something went wrong. Please try again.';
+        errorMsg.classList.remove('hidden');
+      }
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Unsubscribe';
+      return;
+    }
+
+    if (result.alreadyUnsubscribed) {
+      if (errorMsg) {
+        errorMsg.textContent = 'This email is already unsubscribed.';
+        errorMsg.classList.remove('hidden');
+      }
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Unsubscribe';
+      return;
+    }
+
+    form.classList.add('hidden');
+    successMsg?.classList.remove('hidden');
+  });
+</script>
