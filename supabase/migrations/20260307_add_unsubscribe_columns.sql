@@ -1,15 +1,45 @@
--- Add unsubscribe support to subscribers table
--- The existing `status` column (text, default 'active') is already used for subscribe state.
--- We add `unsubscribed_at` to track when a user unsubscribed.
+-- Create subscribers table (if it doesn't exist) and add unsubscribe support.
+-- Fields match what src/lib/supabase.ts addSubscriber() and unsubscribeEmail() expect.
 
--- Add unsubscribed_at column
-ALTER TABLE subscribers
-  ADD COLUMN IF NOT EXISTS unsubscribed_at timestamptz DEFAULT NULL;
+CREATE TABLE IF NOT EXISTS subscribers (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  site_id uuid NOT NULL REFERENCES sites(id),
+  email text NOT NULL,
+  name text,
+  source text DEFAULT 'website_form',
+  utm_source text,
+  utm_campaign text,
+  status text DEFAULT 'active',
+  unsubscribed_at timestamptz,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE (site_id, email)
+);
 
--- Backfill: ensure all existing rows have status = 'active' (should already be the case)
-UPDATE subscribers SET status = 'active' WHERE status IS NULL;
+-- Enable RLS
+ALTER TABLE subscribers ENABLE ROW LEVEL SECURITY;
 
--- Allow anon role to update subscribers (needed for client-side unsubscribe)
--- The existing RLS policy should already allow inserts; add update permission
--- scoped to the status and unsubscribed_at columns only.
--- NOTE: Run this in Supabase SQL Editor if RLS policies need adjustment.
+-- Allow anon to insert (subscribe)
+CREATE POLICY "Allow anon to insert subscribers"
+  ON subscribers
+  FOR INSERT
+  TO anon
+  WITH CHECK (true);
+
+-- Allow anon to select (needed for unsubscribe lookup)
+CREATE POLICY "Allow anon to select subscribers"
+  ON subscribers
+  FOR SELECT
+  TO anon
+  USING (true);
+
+-- Allow anon to update (needed for unsubscribe status change)
+CREATE POLICY "Allow anon to update subscribers"
+  ON subscribers
+  FOR UPDATE
+  TO anon
+  USING (true)
+  WITH CHECK (true);
+
+-- Grant permissions to anon role
+GRANT SELECT, INSERT, UPDATE ON subscribers TO anon;
