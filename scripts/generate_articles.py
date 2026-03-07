@@ -40,7 +40,7 @@ from supabase import create_client
 
 # Add scripts/lib to path for shared utilities
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
-from dedup import is_duplicate, load_existing_articles, check_research_context
+from dedup import is_duplicate, load_existing_articles, check_research_context, build_avoidance_data, extract_keywords
 
 
 # =============================================================================
@@ -254,16 +254,44 @@ def ask_perplexity(messages: list, max_tokens: int = 1024) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
-def research_topic(category: str, existing_titles: list[str] = None) -> str:
-    """Use Perplexity to research real lawsuits in a category. Returns structured research."""
-    avoid_section = ""
-    if existing_titles:
-        titles_sample = existing_titles[:100]
-        avoid_section = (
-            "\n\nIMPORTANT: Do NOT research any of these lawsuits — they are already covered on our site:\n"
-            + "\n".join(f"- {t}" for t in titles_sample)
-            + "\n\nFind DIFFERENT lawsuits not in the list above.\n"
+def _build_avoid_section(avoidance_data: dict) -> str:
+    """Build avoidance prompt section from structured avoidance data."""
+    if not avoidance_data:
+        return ""
+
+    parts = []
+
+    # Part 1: Company names (most effective — short, easy for Perplexity to match)
+    companies = avoidance_data.get("companies", set())
+    if companies:
+        companies_sample = sorted(companies)[:50]
+        parts.append(
+            "Do NOT cover lawsuits involving these companies (already on our site):\n"
+            + ", ".join(companies_sample)
         )
+
+    # Part 2: Specific titles (capped to prevent prompt bloat)
+    titles = avoidance_data.get("titles", [])
+    if titles:
+        titles_sample = titles[:40]
+        parts.append(
+            "Do NOT research any of these specific cases:\n"
+            + "\n".join(f"- {t}" for t in titles_sample)
+        )
+
+    if not parts:
+        return ""
+
+    return (
+        "\n\nIMPORTANT — AVOID DUPLICATES:\n"
+        + "\n\n".join(parts)
+        + "\n\nFind a DIFFERENT lawsuit not listed above.\n"
+    )
+
+
+def research_topic(category: str, avoidance_data: dict = None) -> str:
+    """Use Perplexity to research real lawsuits in a category. Returns structured research."""
+    avoid_section = _build_avoid_section(avoidance_data)
 
     messages = [
         {
@@ -294,16 +322,11 @@ def research_topic(category: str, existing_titles: list[str] = None) -> str:
     return ask_perplexity(messages, max_tokens=1024)
 
 
-def research_settlement(category: str, topic_url: str = "", topic_idea: str = "", existing_titles: list[str] = None) -> str:
+def research_settlement(category: str, topic_url: str = "", topic_idea: str = "", avoidance_data: dict = None) -> str:
     """Use Perplexity to research real settlements. Returns structured research."""
     avoid_section = ""
-    if existing_titles and not topic_url and not topic_idea:
-        titles_sample = existing_titles[:100]
-        avoid_section = (
-            "\n\nIMPORTANT: Do NOT research any of these settlements — they are already covered on our site:\n"
-            + "\n".join(f"- {t}" for t in titles_sample)
-            + "\n\nFind DIFFERENT settlements not in the list above.\n"
-        )
+    if avoidance_data and not topic_url and not topic_idea:
+        avoid_section = _build_avoid_section(avoidance_data)
 
     if topic_url:
         user_content = (
@@ -611,17 +634,10 @@ def main():
 
     print(f"Content plan: {list(zip(content_types, categories))}")
 
-    # Deduplication: fetch existing articles
+    # Deduplication: fetch existing articles and build structured avoidance data
     existing_articles = load_existing_articles(site_db)
-    existing_titles = []
-    for row in existing_articles:
-        if row.get("title"):
-            existing_titles.append(row["title"])
-        if row.get("case_name"):
-            existing_titles.append(row["case_name"])
-    existing_titles = list(set(existing_titles))
-    if existing_titles:
-        print(f"Dedup: {len(existing_titles)} existing titles/cases loaded")
+    avoidance_data = build_avoidance_data(existing_articles)
+    print(f"Dedup: {len(avoidance_data['titles'])} titles/cases, {len(avoidance_data['companies'])} companies loaded")
 
     total_input_tokens = 0
     total_output_tokens = 0
@@ -653,32 +669,43 @@ def main():
         print(f"  🔍 Researching via Perplexity...")
 
         try:
-            # Step 1: Research via Perplexity (different function per type)
-            if article_content_type == "settlement":
-                research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA, existing_titles)
-            else:
-                research_context = research_topic(category, existing_titles)
-            print(f"  ✓ Research complete ({len(research_context)} chars)")
+            # Step 1: Research via Perplexity with multi-retry dedup
+            # Build category-scoped avoidance for this specific article
+            cat_avoidance = build_avoidance_data(existing_articles, category=category)
 
-            # Step 1b: Pre-generation duplicate check on research context
-            is_dup, matched_title = check_research_context(research_context, existing_articles)
-            if is_dup:
-                print(f"  ⚠ Research overlaps existing article: {matched_title[:70]}")
-                print(f"  ↻ Retrying research with matched topic in avoidance list...")
-                # Add the matched title to avoidance and retry once
-                retry_titles = existing_titles + [matched_title] if matched_title else existing_titles
+            max_research_retries = 2
+            research_context = None
+            research_is_dup = False
+
+            for retry in range(max_research_retries + 1):
                 if article_content_type == "settlement":
-                    research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA, retry_titles)
+                    research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA, cat_avoidance)
                 else:
-                    research_context = research_topic(category, retry_titles)
-                print(f"  ✓ Retry research complete ({len(research_context)} chars)")
+                    research_context = research_topic(category, cat_avoidance)
 
-                # Check again after retry
-                is_dup2, matched_title2 = check_research_context(research_context, existing_articles)
-                if is_dup2:
-                    print(f"  ✗ Still overlaps existing article: {matched_title2[:70]} — skipping")
+                attempt_label = f"(attempt {retry + 1}/{max_research_retries + 1}) " if retry > 0 else ""
+                print(f"  ✓ Research {attempt_label}complete ({len(research_context)} chars)")
+
+                # Check if research covers an already-existing topic
+                is_dup, matched_title = check_research_context(research_context, existing_articles)
+                if not is_dup:
+                    research_is_dup = False
+                    break  # Research is clean — proceed to generation
+
+                research_is_dup = True
+                if retry < max_research_retries:
+                    print(f"  ⚠ Research overlaps existing: {matched_title[:70] if matched_title else 'unknown'}")
+                    print(f"  ↻ Retrying with stronger avoidance...")
+                    # Strengthen avoidance for next attempt
+                    if matched_title:
+                        cat_avoidance["titles"].append(matched_title)
+                        cat_avoidance["keywords"].append(extract_keywords(matched_title))
+                else:
+                    print(f"  ✗ Still overlaps after {max_research_retries} retries: {matched_title[:70] if matched_title else 'unknown'} — skipping")
                     articles_failed += 1
-                    continue
+
+            if research_is_dup:
+                continue
 
             # Step 2: Build prompt with research context injected
             article_prompt = article_prompt_template.replace("{{category}}", category)
@@ -722,8 +749,14 @@ def main():
             articles_generated += 1
             articles_published += 1
 
-            # Add to dedup list so subsequent articles in this batch don't duplicate
-            existing_articles.append({"title": title, "case_name": case_name})
+            # Add to dedup lists so subsequent articles in this batch don't duplicate
+            existing_articles.append({"title": title, "case_name": case_name, "category": category})
+            # Also update avoidance data for next Perplexity call
+            avoidance_data["titles"].append(title)
+            avoidance_data["keywords"].append(extract_keywords(title))
+            if case_name:
+                avoidance_data["titles"].append(case_name)
+                avoidance_data["keywords"].append(extract_keywords(case_name))
 
             if admin_conn and ADMIN_RUN_ID and site_id:
                 write_admin_run_article(admin_conn, {

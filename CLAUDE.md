@@ -133,7 +133,10 @@ The `CONTENT_TYPE` input controls what gets generated: `mixed` (default, roughly
 3. **images** — Claude Haiku writes prompt → GPT Image 1.5 generates photorealistic hero image (2 retry attempts per image, strict gate blocks deploy if ANY image fails) → Cloudflare Pages rebuild via deploy hook
 
 ### Deduplication
-Keyword-based Jaccard similarity (`scripts/lib/dedup.py`). Rejects articles with title or case name >= 40% overlap with existing articles.
+Multi-layer keyword-based Jaccard similarity (`scripts/lib/dedup.py`). Three checkpoints:
+1. **Pre-research avoidance** — `build_avoidance_data()` extracts company names + titles from DB, sent to Perplexity prompt to avoid known topics. Category-scoped (same-category articles prioritized). Multi-retry (up to 2 retries with progressively stronger avoidance lists).
+2. **Post-research check** — `check_research_context()` extracts "X v. Y" patterns and labeled fields from Perplexity output, Jaccard-checks against existing articles.
+3. **Post-generation check** — `is_duplicate()` compares generated title + case_name against all existing (Jaccard >= 0.4). Intra-batch tracking ensures articles within the same run don't duplicate each other.
 
 ## Deploy
 Push to `main` triggers Cloudflare Pages build. The pipeline also triggers a rebuild via `DEPLOY_HOOK_URL` after publishing content.

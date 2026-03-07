@@ -152,14 +152,100 @@ def check_research_context(research_text: str, existing_articles: list[dict]) ->
     return False, None
 
 
+def extract_keywords(text: str) -> set[str]:
+    """Public wrapper around _extract_keywords for use by other modules."""
+    return _extract_keywords(text)
+
+
 def load_existing_articles(site_db) -> list[dict]:
-    """Load existing article titles and case names from the database for dedup."""
+    """Load existing article titles, case names, and categories from the database for dedup."""
     try:
         existing = site_db.table("articles") \
-            .select("title, case_name") \
+            .select("title, case_name, category") \
             .neq("content_stage", "failed") \
             .execute()
         return existing.data or []
     except Exception as e:
         print(f"WARNING: Could not load existing articles for dedup: {e}")
         return []
+
+
+def build_avoidance_data(existing_articles: list[dict], category: str | None = None) -> dict:
+    """
+    Build structured avoidance data for Perplexity research prompts.
+
+    Returns:
+        {
+            "titles": list[str] — deduplicated title + case_name strings (for prompt),
+            "companies": set[str] — defendant/company names from "X v. Y" patterns,
+            "keywords": list[set[str]] — keyword sets parallel to titles (for Jaccard),
+        }
+
+    If category is provided, same-category articles are sorted first (most likely duplicates).
+    """
+    companies: set[str] = set()
+    seen_titles: dict[str, None] = {}  # order-preserving dedup
+    keywords: list[set[str]] = []
+
+    # Sort same-category articles first when category is specified
+    if category:
+        sorted_articles = sorted(
+            existing_articles,
+            key=lambda a: (0 if a.get("category") == category else 1),
+        )
+    else:
+        sorted_articles = existing_articles
+
+    for article in sorted_articles:
+        title = article.get("title", "")
+        case_name = article.get("case_name", "")
+
+        if title and title not in seen_titles:
+            seen_titles[title] = None
+            keywords.append(_extract_keywords(title))
+
+        if case_name and case_name not in seen_titles:
+            seen_titles[case_name] = None
+            keywords.append(_extract_keywords(case_name))
+
+            # Extract defendant company from "X v. Y" pattern
+            match = re.match(r'.+?\s+(?:v\.|vs\.?)\s+(.+)', case_name, re.IGNORECASE)
+            if match:
+                company = match.group(1).strip().rstrip('.,;')
+                # Remove trailing case numbers / court references
+                company = re.sub(r',?\s*(?:Case|No\.|Civ\.|Docket).*$', '', company, flags=re.IGNORECASE).strip()
+                if len(company) > 2:
+                    companies.add(company)
+
+    return {
+        "titles": list(seen_titles.keys()),
+        "companies": companies,
+        "keywords": keywords,
+    }
+
+
+def is_topic_covered(topic_text: str, avoidance_data: dict, threshold: float = 0.4) -> tuple[bool, str | None]:
+    """
+    Quick check whether a topic description overlaps with existing content.
+
+    Args:
+        topic_text: A short text describing a potential topic (company name, case concept, etc.)
+        avoidance_data: Output of build_avoidance_data()
+        threshold: Jaccard threshold (default 0.4, matching is_duplicate)
+
+    Returns:
+        (is_covered, matched_title_or_None)
+    """
+    topic_kw = _extract_keywords(topic_text)
+    if len(topic_kw) < 2:
+        return False, None
+
+    titles = avoidance_data.get("titles", [])
+    keywords_list = avoidance_data.get("keywords", [])
+
+    for idx, existing_kw in enumerate(keywords_list):
+        if _jaccard(topic_kw, existing_kw) >= threshold:
+            matched = titles[idx] if idx < len(titles) else None
+            return True, matched
+
+    return False, None
