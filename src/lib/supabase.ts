@@ -143,7 +143,7 @@ export async function getOpenSettlements(opts?: { limit?: number }): Promise<Art
     .select('*')
     .eq('site_id', siteId)
     .eq('content_stage', 'published')
-    .or(`case_status.in.(active,open,approved,paying),claim_deadline.gte.${today}`)
+    .or(`case_status.in.(settled,approved,paying),claim_deadline.gte.${today}`)
     .order('claim_deadline', { ascending: true, nullsFirst: false })
     .order('published_at', { ascending: false })
     .limit(opts?.limit ?? 100);

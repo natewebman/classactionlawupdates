@@ -94,59 +94,80 @@ const STOP_WORDS = new Set([
   'not', 'but', 'its', 'their', 'they', 'them', 'his', 'her',
   'class-action', 'multi', 'district', 'litigation', 'preliminary',
   'final', 'approval', 'approved', 'pending', 'know', 'need',
+  // Common title verbs that follow brand names
+  'hit', 'hits', 'faces', 'facing', 'settles', 'settled', 'settling',
+  'sparks', 'reaches', 'reached', 'sues', 'sued', 'suing',
+  'wins', 'pays', 'drops', 'seeks', 'dumps', 'dumping',
+  // Generic nouns/products that aren't brand names
+  'contamination', 'chain', 'clinic',
+  'airbag', 'airbags', 'listeria', 'order', 'flow',
 ]);
 
+/** Strip common legal entity suffixes from a brand name. */
+function cleanBrandSuffix(brand: string): string {
+  return brand.replace(/,?\s*(Inc|LLC|Corp|Ltd|Co|LP|L\.?P\.?|et\s+al)\.?\s*$/i, '').trim();
+}
+
 /**
- * Extract a brand/company name from an article.
- * Uses case_name first, falls back to title.
- * Returns null if no brand can be extracted.
+ * Extract a brand/company name from a text source using proper-noun detection.
+ * Returns the first 1-3 consecutive capitalized non-stop-words.
+ * Preserves "&" within words (e.g., "AT&T").
  */
-export function extractBrand(article: Article): string | null {
-  // Strategy 1: case_name often has "Smith v. CompanyName" format
-  if (article.case_name) {
-    const vsMatch = article.case_name.match(/\bv\.?\s+(.+?)(?:\s*,|\s*$)/i);
-    if (vsMatch) {
-      const brand = vsMatch[1].replace(/,?\s*(Inc|LLC|Corp|Ltd|Co|LP|L\.?P\.?|et\s+al)\.?\s*$/i, '').trim();
-      if (brand.length >= 2 && brand.length <= 60) {
-        return brand;
-      }
-    }
-  }
+function extractProperNouns(text: string, maxWords = 3): string | null {
+  const words = text.split(/\s+/);
+  const buffer: string[] = [];
 
-  // Strategy 2: Title — look for first capitalized multi-word or single proper noun
-  const title = article.title;
-
-  // Match brand-like patterns: "Apple", "T-Mobile", "Wells Fargo"
-  const titleWords = title.split(/\s+/);
-  const candidates: string[] = [];
-  let buffer: string[] = [];
-
-  for (const word of titleWords) {
-    const clean = word.replace(/[^a-zA-Z0-9'-]/g, '');
+  for (const word of words) {
+    // Keep "&" when embedded (AT&T) but not as standalone
+    const clean = word.replace(/[^a-zA-Z0-9'&-]/g, '');
     const isCapitalized = /^[A-Z]/.test(clean);
     const isStopWord = STOP_WORDS.has(clean.toLowerCase());
 
     if (isCapitalized && !isStopWord && clean.length >= 2) {
       buffer.push(clean);
+      if (buffer.length >= maxWords) break;
     } else {
-      if (buffer.length > 0) {
-        candidates.push(buffer.join(' '));
-        buffer = [];
-      }
-    }
-  }
-  if (buffer.length > 0) {
-    candidates.push(buffer.join(' '));
-  }
-
-  // Return first candidate that looks like a brand (not just "Settlement" etc.)
-  for (const candidate of candidates) {
-    if (candidate.length >= 2 && candidate.length <= 50) {
-      return candidate;
+      if (buffer.length > 0) break;
     }
   }
 
-  return null;
+  if (buffer.length === 0) return null;
+  const result = buffer.join(' ');
+  return result.length >= 2 && result.length <= 60 ? result : null;
+}
+
+/**
+ * Extract a brand/company name from an article.
+ * Tries case_name patterns first, falls back to title.
+ * Returns null if no brand can be extracted.
+ */
+export function extractBrand(article: Article): string | null {
+  if (article.case_name) {
+    // Strategy 1a: "Smith v. CompanyName" format
+    const vsMatch = article.case_name.match(/\bv\.?\s+(.+?)(?:\s*,|\s*$)/i);
+    if (vsMatch) {
+      const brand = cleanBrandSuffix(vsMatch[1]);
+      if (brand.length >= 2 && brand.length <= 60) return brand;
+    }
+
+    // Strategy 1b: "In re: CompanyName ..." format
+    // Brand names in "In re" cases are typically 1-2 words (e.g., "Kaiser Permanente", "Robinhood")
+    const inReMatch = article.case_name.match(/In\s+re:?\s+(.+)/i);
+    if (inReMatch) {
+      const brand = extractProperNouns(inReMatch[1], 2);
+      if (brand) return cleanBrandSuffix(brand);
+    }
+
+    // Strategy 1c: Other case_names — extract first proper noun phrase
+    if (!article.case_name.match(/\bv\.?\s/i) && !article.case_name.match(/In\s+re/i)) {
+      const brand = extractProperNouns(article.case_name, 3);
+      if (brand) return cleanBrandSuffix(brand);
+    }
+  }
+
+  // Strategy 2: Title — extract first proper noun phrase (max 3 words)
+  const brand = extractProperNouns(article.title, 3);
+  return brand;
 }
 
 /**
