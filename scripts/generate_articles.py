@@ -676,99 +676,131 @@ def main():
         print(f"  🔍 Researching via Perplexity...")
 
         try:
-            # Step 1: Research via Perplexity with multi-retry dedup
-            # Build category-scoped avoidance, merging intra-batch companies
-            cat_avoidance = _category_avoidance(avoidance_data, existing_articles, category)
+            # Outer retry loop: if post-generation dedup catches a duplicate,
+            # retry the entire research→generate cycle with stronger avoidance
+            max_article_attempts = 3
+            article_written = False
 
-            max_research_retries = 2
-            research_context = None
-            research_is_dup = False
+            for attempt in range(max_article_attempts):
+                if attempt > 0:
+                    print(f"  ↻ Retrying article generation (attempt {attempt + 1}/{max_article_attempts})...")
 
-            for retry in range(max_research_retries + 1):
+                # Step 1: Research via Perplexity with multi-retry dedup
+                # Build category-scoped avoidance, merging intra-batch companies
+                cat_avoidance = _category_avoidance(avoidance_data, existing_articles, category)
+
+                max_research_retries = 2
+                research_context = None
+                research_is_dup = False
+
+                for retry in range(max_research_retries + 1):
+                    if article_content_type == "settlement":
+                        research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA, cat_avoidance)
+                    else:
+                        research_context = research_topic(category, cat_avoidance)
+
+                    attempt_label = f"(research {retry + 1}/{max_research_retries + 1}) " if retry > 0 else ""
+                    print(f"  ✓ Research {attempt_label}complete ({len(research_context)} chars)")
+
+                    # Check if research covers an already-existing topic
+                    is_dup, matched_title = check_research_context(research_context, existing_articles)
+                    if not is_dup:
+                        research_is_dup = False
+                        break  # Research is clean — proceed to generation
+
+                    research_is_dup = True
+                    if retry < max_research_retries:
+                        print(f"  ⚠ Research overlaps existing: {matched_title[:70] if matched_title else 'unknown'}")
+                        print(f"  ↻ Retrying with stronger avoidance...")
+                        # Strengthen avoidance for next attempt
+                        if matched_title:
+                            cat_avoidance["titles"].append(matched_title)
+                            cat_avoidance["keywords"].append(extract_keywords(matched_title))
+                    else:
+                        print(f"  ✗ Still overlaps after {max_research_retries} retries: {matched_title[:70] if matched_title else 'unknown'}")
+
+                if research_is_dup:
+                    break  # All research retries exhausted — give up on this article slot
+
+                # Step 1b: Pre-generation topic coverage check
+                # Catches cases where check_research_context() misses overlap because
+                # the research doesn't use exact "X v. Y" formatting
+                topic_covered, topic_match = is_topic_covered(research_context, cat_avoidance)
+                if topic_covered:
+                    print(f"  ⚠ Research topic already covered: {topic_match[:70] if topic_match else 'unknown'}")
+                    if topic_match:
+                        cat_avoidance["titles"].append(topic_match)
+                        cat_avoidance["keywords"].append(extract_keywords(topic_match))
+                    continue  # Retry outer loop with stronger avoidance
+
+                # Step 2: Build prompt with research context injected
+                article_prompt = article_prompt_template.replace("{{category}}", category)
+                article_prompt = article_prompt.replace("{{article_number}}", str(i + 1))
+                article_prompt = article_prompt.replace("{{total_articles}}", str(ARTICLES_COUNT))
+                article_prompt = article_prompt.replace("{{research_context}}", research_context)
+
+                article_prompt_hash = sha256_short(article_prompt)
+
+                # Step 3: Generate article with Claude (no web search)
+                result = generate_article(claude, system_prompt, article_prompt)
+                article_data = result["article"]
+                input_tokens = result["input_tokens"]
+                output_tokens = result["output_tokens"]
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
+
+                title = article_data.get("title", "Untitled")
+                case_name = article_data.get("case_name")
+                slug = f"{article_data.get('slug') or slugify(title)}-{article_id[:8]}"
+                word_count = len(article_data.get("content", "").split())
+                source_url = article_data.get("source_url", "")
+
+                print(f"  Title:  {title}")
+                print(f"  Slug:   {slug}")
                 if article_content_type == "settlement":
-                    research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA, cat_avoidance)
+                    print(f"  Amount: {article_data.get('settlement_amount', 'N/A')}")
+                    print(f"  Deadline: {article_data.get('claim_deadline', 'N/A')}")
+                print(f"  Words:  {word_count}")
+                print(f"  Source: {source_url[:60]}..." if len(str(source_url)) > 60 else f"  Source: {source_url}")
+                print(f"  Tokens: {input_tokens} in / {output_tokens} out")
+
+                # Post-generation duplicate check — title/case_name Jaccard + company name match
+                if is_duplicate(title, case_name, existing_articles, companies=avoidance_data.get("companies")):
+                    print(f"  ⚠ DUPLICATE detected (title/company match)")
+                    # Strengthen avoidance and retry
+                    cat_avoidance["titles"].append(title)
+                    cat_avoidance["keywords"].append(extract_keywords(title))
+                    if case_name:
+                        cat_avoidance["titles"].append(case_name)
+                        cat_avoidance["keywords"].append(extract_keywords(case_name))
+                    continue  # Retry outer loop
+
+                # Post-generation content body check — catches cases where the title is
+                # worded differently but the article body references the same case.
+                # use_proper_nouns=False avoids false positives from generic legal
+                # terms in long article text (only checks "X v. Y" and labeled fields)
+                content_body = article_data.get("content", "")
+                if content_body:
+                    body_is_dup, body_match = check_research_context(
+                        content_body, existing_articles, use_proper_nouns=False
+                    )
+                    if body_is_dup:
+                        print(f"  ⚠ DUPLICATE detected in content body (matches: {body_match[:70] if body_match else 'unknown'})")
+                        if body_match:
+                            cat_avoidance["titles"].append(body_match)
+                            cat_avoidance["keywords"].append(extract_keywords(body_match))
+                        continue  # Retry outer loop
+
+                article_written = True
+                break  # Post-gen checks passed — article is clean
+
+            if not article_written:
+                if not research_is_dup:
+                    print(f"  ✗ All {max_article_attempts} generation attempts produced duplicates — skipping")
                 else:
-                    research_context = research_topic(category, cat_avoidance)
-
-                attempt_label = f"(attempt {retry + 1}/{max_research_retries + 1}) " if retry > 0 else ""
-                print(f"  ✓ Research {attempt_label}complete ({len(research_context)} chars)")
-
-                # Check if research covers an already-existing topic
-                is_dup, matched_title = check_research_context(research_context, existing_articles)
-                if not is_dup:
-                    research_is_dup = False
-                    break  # Research is clean — proceed to generation
-
-                research_is_dup = True
-                if retry < max_research_retries:
-                    print(f"  ⚠ Research overlaps existing: {matched_title[:70] if matched_title else 'unknown'}")
-                    print(f"  ↻ Retrying with stronger avoidance...")
-                    # Strengthen avoidance for next attempt
-                    if matched_title:
-                        cat_avoidance["titles"].append(matched_title)
-                        cat_avoidance["keywords"].append(extract_keywords(matched_title))
-                else:
-                    print(f"  ✗ Still overlaps after {max_research_retries} retries: {matched_title[:70] if matched_title else 'unknown'} — skipping")
-                    articles_failed += 1
-
-            if research_is_dup:
-                continue
-
-            # Step 1b: Pre-generation topic coverage check
-            # Catches cases where check_research_context() misses overlap because
-            # the research doesn't use exact "X v. Y" formatting
-            topic_covered, topic_match = is_topic_covered(research_context, cat_avoidance)
-            if topic_covered:
-                print(f"  ⚠ Research topic already covered: {topic_match[:70] if topic_match else 'unknown'} — skipping")
+                    print(f"  ✗ Could not find unique research — skipping")
                 articles_failed += 1
                 continue
-
-            # Step 2: Build prompt with research context injected
-            article_prompt = article_prompt_template.replace("{{category}}", category)
-            article_prompt = article_prompt.replace("{{article_number}}", str(i + 1))
-            article_prompt = article_prompt.replace("{{total_articles}}", str(ARTICLES_COUNT))
-            article_prompt = article_prompt.replace("{{research_context}}", research_context)
-
-            article_prompt_hash = sha256_short(article_prompt)
-
-            # Step 3: Generate article with Claude (no web search)
-            result = generate_article(claude, system_prompt, article_prompt)
-            article_data = result["article"]
-            input_tokens = result["input_tokens"]
-            output_tokens = result["output_tokens"]
-            total_input_tokens += input_tokens
-            total_output_tokens += output_tokens
-
-            title = article_data.get("title", "Untitled")
-            case_name = article_data.get("case_name")
-            slug = f"{article_data.get('slug') or slugify(title)}-{article_id[:8]}"
-            word_count = len(article_data.get("content", "").split())
-            source_url = article_data.get("source_url", "")
-
-            print(f"  Title:  {title}")
-            print(f"  Slug:   {slug}")
-            if article_content_type == "settlement":
-                print(f"  Amount: {article_data.get('settlement_amount', 'N/A')}")
-                print(f"  Deadline: {article_data.get('claim_deadline', 'N/A')}")
-            print(f"  Words:  {word_count}")
-            print(f"  Source: {source_url[:60]}..." if len(str(source_url)) > 60 else f"  Source: {source_url}")
-            print(f"  Tokens: {input_tokens} in / {output_tokens} out")
-
-            # Post-generation duplicate check — title/case_name Jaccard + company name match
-            if is_duplicate(title, case_name, existing_articles, companies=avoidance_data.get("companies")):
-                print(f"  ⚠ DUPLICATE detected (title/company match) — skipping article")
-                articles_failed += 1
-                continue
-
-            # Post-generation content body check — catches cases where the title is
-            # worded differently but the article body references the same case
-            content_body = article_data.get("content", "")
-            if content_body:
-                body_is_dup, body_match = check_research_context(content_body, existing_articles)
-                if body_is_dup:
-                    print(f"  ⚠ DUPLICATE detected in content body (matches: {body_match[:70] if body_match else 'unknown'}) — skipping")
-                    articles_failed += 1
-                    continue
 
             write_site_article(site_db, article_id, article_data, category, site_db_site_id, article_content_type)
             print(f"  ✓ Site DB: written")

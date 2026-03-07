@@ -156,13 +156,24 @@ def is_duplicate(
     return False
 
 
-def check_research_context(research_text: str, existing_articles: list[dict]) -> tuple[bool, str | None]:
+def check_research_context(
+    research_text: str,
+    existing_articles: list[dict],
+    use_proper_nouns: bool = True,
+) -> tuple[bool, str | None]:
     """
     Check if Perplexity research covers a topic already in the database.
 
     Extracts candidate case names ("X v. Y" patterns) and labeled entities
     from the research text, then checks against existing article titles
     and case names using keyword similarity.
+
+    Args:
+        research_text: The research or article text to check
+        existing_articles: List of existing article dicts
+        use_proper_nouns: Whether to extract proper noun phrases (default True).
+            Set to False for full article body checks to avoid false positives
+            from generic legal terms in long text.
 
     Returns (is_duplicate, matched_existing_title) so the caller can log
     which existing article was matched.
@@ -183,8 +194,10 @@ def check_research_context(research_text: str, existing_articles: list[dict]) ->
         candidates.append(m.group(1).strip().rstrip('.'))
 
     # 3. Proper noun phrases — catches "The lawsuit against Wells Fargo..."
-    for phrase in _extract_proper_noun_phrases(research_text):
-        candidates.append(phrase)
+    # Skipped for full article body checks (too many false positives in long text)
+    if use_proper_nouns:
+        for phrase in _extract_proper_noun_phrases(research_text):
+            candidates.append(phrase)
 
     if not candidates:
         return False, None
