@@ -223,6 +223,36 @@ try {
   fail('/api/content-stats endpoint not found');
 }
 
+// ── Hero Image Fallback ──
+
+console.log('\n🖼️  Hero Image Fallback');
+
+// Settlement page must have an else branch for hero image (gradient placeholder)
+if (settlementPage.includes('heroImage ?') || settlementPage.includes('meta.heroImage ?')) {
+  pass('Settlement page has hero image if/else (not conditional skip)');
+} else {
+  fail('Settlement page conditionally skips hero image — needs fallback placeholder');
+}
+
+if (settlementPage.includes('bg-gradient-to-br from-navy')) {
+  pass('Settlement page has gradient placeholder for missing images');
+} else {
+  fail('Settlement page missing gradient placeholder fallback');
+}
+
+// News page must have an else branch for hero image
+if (newsPage.includes('heroImage ?')) {
+  pass('News page has hero image if/else (not conditional skip)');
+} else {
+  fail('News page conditionally skips hero image — needs fallback placeholder');
+}
+
+if (newsPage.includes('bg-gradient-to-br from-navy')) {
+  pass('News page has gradient placeholder for missing images');
+} else {
+  fail('News page missing gradient placeholder fallback');
+}
+
 // ── Crawl Structure & Internal Linking ──
 
 console.log('\n🔗 Crawl Structure & Internal Linking');

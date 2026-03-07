@@ -84,23 +84,36 @@ async function main() {
 
   console.log(`\n🖼️  Found ${articles.length} article(s) without hero images.\n`);
 
+  const MAX_RETRIES = 2;
   let success = 0;
-  let failed = 0;
+  const failedArticles: typeof articles = [];
 
   for (let i = 0; i < articles.length; i++) {
     const article = articles[i];
     const label = `[${i + 1}/${articles.length}]`;
+    let succeeded = false;
 
-    try {
-      console.log(`${label} Processing: "${article.title}"...`);
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const attemptLabel = attempt > 1 ? ` (retry ${attempt - 1})` : "";
+        console.log(`${label} Processing${attemptLabel}: "${article.title}"...`);
 
-      const result = await generateArticleImage(article);
+        const result = await generateArticleImage(article);
+        console.log(`${label} ✅ Done → ${result.filename}`);
+        success++;
+        succeeded = true;
+        break;
+      } catch (err: any) {
+        console.error(`${label} ❌ Attempt ${attempt}/${MAX_RETRIES} failed: ${err.message}`);
+        if (attempt < MAX_RETRIES) {
+          console.log(`${label} ↻ Retrying in 3s...`);
+          await sleep(3000);
+        }
+      }
+    }
 
-      console.log(`${label} ✅ Done → ${result.filename}`);
-      success++;
-    } catch (err: any) {
-      console.error(`${label} ❌ Failed: ${err.message}`);
-      failed++;
+    if (!succeeded) {
+      failedArticles.push(article);
     }
 
     // Rate-limit between calls (skip after the last one)
@@ -110,8 +123,17 @@ async function main() {
   }
 
   console.log(
-    `\n📊 Complete: ${success} succeeded, ${failed} failed out of ${articles.length} total.\n`
+    `\n📊 Complete: ${success} succeeded, ${failedArticles.length} failed out of ${articles.length} total.\n`
   );
+
+  if (failedArticles.length > 0) {
+    console.error("❌ Failed to generate images for:");
+    for (const a of failedArticles) {
+      console.error(`   • ${a.slug}`);
+    }
+    console.error("\n❌ Blocking deploy — all articles must have images.");
+    process.exit(1);
+  }
 }
 
 main().catch((err) => {
