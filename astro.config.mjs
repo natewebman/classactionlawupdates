@@ -34,4 +34,11 @@ export default defineConfig({
   ],
   output: 'static',
   adapter: cloudflare(),
+  vite: {
+    server: {
+      fs: {
+        allow: ['..'],
+      },
+    },
+  },
 });
