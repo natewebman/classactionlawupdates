@@ -33,6 +33,13 @@ import { siteConfig } from '../site.config';
             class="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg shadow-xl py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left"
             data-dropdown-menu
           >
+            <a
+              href="/open-class-action-settlements"
+              class="block px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors"
+            >
+              Open Settlements
+            </a>
+            <div class="border-t border-gray-100 my-1"></div>
             {siteConfig.settlementCategories.map((cat) => (
               <a
                 href={cat.slug === 'all' ? '/settlements' : `/category/${cat.slug}`}
@@ -41,13 +48,6 @@ import { siteConfig } from '../site.config';
                 {cat.name}
               </a>
             ))}
-            <div class="border-t border-gray-100 my-1"></div>
-            <a
-              href="/open-class-action-settlements"
-              class="block px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors"
-            >
-              Open Settlements
-            </a>
           </div>
         </div>
 
@@ -117,6 +117,12 @@ import { siteConfig } from '../site.config';
           </svg>
         </button>
         <div class="hidden pl-4 space-y-1 mt-1" data-mobile-submenu>
+          <a
+            href="/open-class-action-settlements"
+            class="block px-3 py-2 text-sm text-emerald-400 hover:text-emerald-300 hover:bg-white/10 rounded-md"
+          >
+            Open Settlements
+          </a>
           {siteConfig.settlementCategories.map((cat) => (
             <a
               href={cat.slug === 'all' ? '/settlements' : `/category/${cat.slug}`}
@@ -125,12 +131,6 @@ import { siteConfig } from '../site.config';
               {cat.name}
             </a>
           ))}
-          <a
-            href="/open-class-action-settlements"
-            class="block px-3 py-2 text-sm text-emerald-400 hover:text-emerald-300 hover:bg-white/10 rounded-md"
-          >
-            Open Settlements
-          </a>
         </div>
       </div>
 
