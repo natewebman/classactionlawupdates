@@ -21,11 +21,6 @@ STOP_WORDS = {
     "how", "what", "when", "where", "why", "who", "which", "that", "this",
     "these", "those", "than", "its", "it", "your", "their", "our",
     "not", "no", "nor", "so", "very", "just", "also", "now", "new",
-    # Domain-specific stop words
-    "class", "action", "lawsuit", "settlement", "claim", "claims", "file",
-    "filing", "filed", "case", "update", "news", "latest", "million",
-    "billion", "consumers", "customers", "members", "users", "owners",
-    "you", "your", "how", "what", "know", "need",
 }
 
 
@@ -38,6 +33,47 @@ def _extract_keywords(text: str) -> set[str]:
     text = re.sub(r'[^a-z0-9\s]', ' ', text)
     words = text.split()
     return {w for w in words if w not in STOP_WORDS and len(w) > 1}
+
+
+# Common proper noun phrases that are NOT company/person names
+_PROPER_NOUN_STOPLIST = {
+    "united states", "supreme court", "district court", "circuit court",
+    "federal court", "appeals court", "court of appeals", "new york",
+    "los angeles", "san francisco", "san diego", "class action",
+    "class members", "personal injury", "product recall", "data breach",
+    "consumer protection", "fair labor", "equal employment",
+}
+
+
+def _extract_proper_noun_phrases(text: str) -> list[str]:
+    """Extract capitalized multi-word phrases (likely company/person names)."""
+    # Match sequences of 2+ capitalized words (e.g., "Wells Fargo", "Johnson & Johnson")
+    phrases = re.findall(r'\b(?:[A-Z][a-z]+(?:\s+(?:&\s+)?[A-Z][a-z]+)+)\b', text)
+    # Also catch single-word proper nouns followed by common legal suffixes
+    # that indicate companies (e.g., "Apple Inc", "Google LLC")
+    phrases += re.findall(r'\b([A-Z][a-z]+\s+(?:Inc|LLC|Corp|Co|Ltd|Group|Holdings))\b', text)
+    # Deduplicate, skip short matches, filter out common non-entity phrases
+    seen = set()
+    result = []
+    for p in phrases:
+        p = p.strip()
+        if len(p) > 3 and p not in seen and p.lower() not in _PROPER_NOUN_STOPLIST:
+            seen.add(p)
+            result.append(p)
+    return result
+
+
+_LEGAL_SUFFIXES = re.compile(
+    r',?\s*\b(?:Inc\.?|LLC|L\.L\.C\.?|Corp(?:oration)?\.?|Co\.?|Ltd\.?|'
+    r'Group|Holdings|Enterprises?|International|LP|L\.P\.?|PLC|NA|N\.A\.?)\s*$',
+    re.IGNORECASE,
+)
+
+
+def _normalize_company(name: str) -> str:
+    """Strip legal suffixes and normalize a company name for matching."""
+    name = _LEGAL_SUFFIXES.sub('', name).strip().rstrip('.,;')
+    return name
 
 
 def _jaccard(a: set, b: set) -> float:
@@ -77,15 +113,18 @@ def is_duplicate(
     if not new_title_kw and not new_case_kw:
         return False
 
-    # Company-name substring check — catches rewording of the same defendant
+    # Company-name normalized check — catches rewording of the same defendant
     if companies:
         title_lower = new_title.lower()
         case_lower = new_case_name.lower() if new_case_name else ""
+        combined = title_lower + " " + case_lower
         for company in companies:
-            company_lower = company.lower()
-            if len(company_lower) < 3:
+            normalized = _normalize_company(company).lower()
+            if len(normalized) < 3:
                 continue
-            if company_lower in title_lower or company_lower in case_lower:
+            # Word-boundary match: each token of the company name must appear
+            tokens = normalized.split()
+            if all(t in combined for t in tokens):
                 return True
 
     for existing in existing_entries:
@@ -143,6 +182,10 @@ def check_research_context(research_text: str, existing_articles: list[dict]) ->
     ):
         candidates.append(m.group(1).strip().rstrip('.'))
 
+    # 3. Proper noun phrases — catches "The lawsuit against Wells Fargo..."
+    for phrase in _extract_proper_noun_phrases(research_text):
+        candidates.append(phrase)
+
     if not candidates:
         return False, None
 
@@ -177,6 +220,19 @@ def check_research_context(research_text: str, existing_articles: list[dict]) ->
 def extract_keywords(text: str) -> set[str]:
     """Public wrapper around _extract_keywords for use by other modules."""
     return _extract_keywords(text)
+
+
+def extract_company_from_case_name(case_name: str) -> str | None:
+    """Extract and normalize defendant company from 'X v. Y' case name."""
+    if not case_name:
+        return None
+    match = re.match(r'.+?\s+(?:v\.|vs\.?)\s+(.+)', case_name, re.IGNORECASE)
+    if not match:
+        return None
+    company = match.group(1).strip().rstrip('.,;')
+    company = re.sub(r',?\s*(?:Case|No\.|Civ\.|Docket).*$', '', company, flags=re.IGNORECASE).strip()
+    company = _normalize_company(company)
+    return company if len(company) > 2 else None
 
 
 def load_existing_articles(site_db) -> list[dict]:
@@ -236,6 +292,7 @@ def build_avoidance_data(existing_articles: list[dict], category: str | None = N
                 company = match.group(1).strip().rstrip('.,;')
                 # Remove trailing case numbers / court references
                 company = re.sub(r',?\s*(?:Case|No\.|Civ\.|Docket).*$', '', company, flags=re.IGNORECASE).strip()
+                company = _normalize_company(company)
                 if len(company) > 2:
                     companies.add(company)
 
@@ -248,26 +305,56 @@ def build_avoidance_data(existing_articles: list[dict], category: str | None = N
 
 def is_topic_covered(topic_text: str, avoidance_data: dict, threshold: float = 0.4) -> tuple[bool, str | None]:
     """
-    Quick check whether a topic description overlaps with existing content.
+    Check whether a topic description overlaps with existing content.
+
+    Uses a 3-strategy approach:
+    1. Check proper noun phrases against known company names
+    2. Extract keywords from proper noun phrases and Jaccard-compare
+    3. Fall back to full-text keyword extraction (original behavior)
 
     Args:
-        topic_text: A short text describing a potential topic (company name, case concept, etc.)
+        topic_text: Text describing a potential topic (research text, company name, etc.)
         avoidance_data: Output of build_avoidance_data()
-        threshold: Jaccard threshold (default 0.4, matching is_duplicate)
+        threshold: Jaccard threshold (default 0.4)
 
     Returns:
         (is_covered, matched_title_or_None)
     """
-    topic_kw = _extract_keywords(topic_text)
-    if len(topic_kw) < 2:
-        return False, None
-
+    companies = avoidance_data.get("companies", set())
     titles = avoidance_data.get("titles", [])
     keywords_list = avoidance_data.get("keywords", [])
 
-    for idx, existing_kw in enumerate(keywords_list):
-        if _jaccard(topic_kw, existing_kw) >= threshold:
-            matched = titles[idx] if idx < len(titles) else None
-            return True, matched
+    # Strategy 1: Check proper noun phrases against known companies
+    for phrase in _extract_proper_noun_phrases(topic_text):
+        phrase_lower = _normalize_company(phrase).lower()
+        if len(phrase_lower) < 3:
+            continue
+        for company in companies:
+            comp_lower = _normalize_company(company).lower()
+            if len(comp_lower) < 3:
+                continue
+            tokens = comp_lower.split()
+            if all(t in phrase_lower for t in tokens):
+                return True, f"Company match: {company}"
+
+    # Strategy 2: Extract keywords from noun phrases + check Jaccard
+    phrases = _extract_proper_noun_phrases(topic_text)
+    if phrases:
+        phrase_kw: set[str] = set()
+        for p in phrases:
+            phrase_kw |= _extract_keywords(p)
+        if len(phrase_kw) >= 2:
+            for idx, existing_kw in enumerate(keywords_list):
+                if _jaccard(phrase_kw, existing_kw) >= threshold:
+                    matched = titles[idx] if idx < len(titles) else None
+                    return True, matched
+
+    # Strategy 3: Fall back to full-text keyword extraction (original behavior)
+    topic_kw = _extract_keywords(topic_text)
+    if len(topic_kw) >= 2:
+        for idx, existing_kw in enumerate(keywords_list):
+            if _jaccard(topic_kw, existing_kw) >= threshold:
+                matched = titles[idx] if idx < len(titles) else None
+                return True, matched
 
     return False, None

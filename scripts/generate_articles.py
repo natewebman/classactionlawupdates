@@ -40,7 +40,7 @@ from supabase import create_client
 
 # Add scripts/lib to path for shared utilities
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
-from dedup import is_duplicate, load_existing_articles, check_research_context, build_avoidance_data, extract_keywords, is_topic_covered
+from dedup import is_duplicate, load_existing_articles, check_research_context, build_avoidance_data, extract_keywords, is_topic_covered, extract_company_from_case_name
 
 
 # =============================================================================
@@ -639,6 +639,13 @@ def main():
     avoidance_data = build_avoidance_data(existing_articles)
     print(f"Dedup: {len(avoidance_data['titles'])} titles/cases, {len(avoidance_data['companies'])} companies loaded")
 
+    def _category_avoidance(base_avoidance: dict, existing: list[dict], category: str) -> dict:
+        """Build category-prioritized avoidance from the shared base data."""
+        cat_data = build_avoidance_data(existing, category=category)
+        # Merge any intra-batch companies from the shared base
+        cat_data["companies"] = cat_data["companies"] | base_avoidance.get("companies", set())
+        return cat_data
+
     total_input_tokens = 0
     total_output_tokens = 0
     articles_generated = 0
@@ -670,8 +677,8 @@ def main():
 
         try:
             # Step 1: Research via Perplexity with multi-retry dedup
-            # Build category-scoped avoidance for this specific article
-            cat_avoidance = build_avoidance_data(existing_articles, category=category)
+            # Build category-scoped avoidance, merging intra-batch companies
+            cat_avoidance = _category_avoidance(avoidance_data, existing_articles, category)
 
             max_research_retries = 2
             research_context = None
@@ -776,6 +783,10 @@ def main():
             if case_name:
                 avoidance_data["titles"].append(case_name)
                 avoidance_data["keywords"].append(extract_keywords(case_name))
+            # Extract and track company for intra-batch dedup
+            new_company = extract_company_from_case_name(case_name)
+            if new_company:
+                avoidance_data["companies"].add(new_company)
 
             if admin_conn and ADMIN_RUN_ID and site_id:
                 write_admin_run_article(admin_conn, {
