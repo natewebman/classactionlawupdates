@@ -34,6 +34,7 @@ src/
     about.astro                          # About page
     editorial-policy.astro               # Editorial policy page
     attorney-portal.astro                # Attorney portal
+    unsubscribe.astro                        # Unsubscribe from email alerts
     subscribe.astro / signup.astro / login.astro
     privacy-policy / terms / disclaimer
     sitemap-articles.xml.ts              # Dynamic XML sitemap for SSR pages (SSR)
@@ -73,7 +74,7 @@ scripts/
   generate_articles.py          # Unified article generation (news + settlements)
   review_pipeline.py            # Fact-check, update, rewrite pipeline
   generate-missing-images.ts    # Hero image generation (DALL-E 3)
-  validate-seo.mjs             # SEO validation script (54 checks)
+  validate-seo.mjs             # SEO validation script (58 checks)
   prompts/                      # LLM prompt templates
   lib/
     generate-image.ts           # DALL-E 3 image generation utilities
@@ -154,7 +155,7 @@ Footer → /open-class-action-settlements, /about, /editorial-policy, all catego
 
 ### SEO Validation
 
-Run `npm run validate:seo` to check 54 SEO requirements across all page templates:
+Run `npm run validate:seo` to check 58 SEO requirements across all page templates:
 
 - Article structured data (Article, NewsArticle, FAQPage schemas)
 - Organization schema on all pages
@@ -166,6 +167,7 @@ Run `npm run validate:seo` to check 54 SEO requirements across all page template
 - High-intent landing pages (open settlements, brand, state)
 - Brand/state extraction module
 - Sitemap inclusion of all page types
+- Hero image fallback (gradient placeholders on detail pages)
 
 ### Page Rendering
 
@@ -184,6 +186,7 @@ Articles are generated and published via GitHub Actions in a 4-step pipeline:
 1. GENERATE        Perplexity researches real lawsuits → Claude Haiku drafts article
 2. REVIEW          Fact-check → Fact-update → Human-tone rewrite (Claude Sonnet)
 3. IMAGES          Claude Haiku writes image prompt → DALL-E 3 generates hero image
+                   (2 retry attempts per image; ANY failure blocks deploy)
 4. DEPLOY          Cloudflare Pages rebuild via deploy hook
 ```
 
@@ -250,7 +253,7 @@ All data is scoped by `site_id`. The `sites` table maps a `site_key` to a UUID `
 ### Supabase tables
 - `sites` — site registry (site_key, id, deploy_hook_url)
 - `articles` — all content (news + settlements), filtered by `content_stage` and `news_type`
-- `subscribers` — email signups (upsert on site_id + email)
+- `subscribers` — email signups with unsubscribe support (upsert on site_id + email, status: active/unsubscribed)
 - `submissions` — form submissions (attorney portal, etc.)
 
 ## Content Categories

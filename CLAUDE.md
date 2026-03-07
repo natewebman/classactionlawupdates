@@ -15,7 +15,7 @@ Class action lawsuit news and settlement tracker. Auto-generates, fact-checks, a
 npm install
 cp .env.example .env   # Fill in Supabase keys
 npm run dev             # http://localhost:4321
-npm run validate:seo    # Run 54-check SEO validation
+npm run validate:seo    # Run 58-check SEO validation
 ```
 
 ## Architecture
@@ -26,7 +26,7 @@ All data is scoped by `site_id`. The `sites` table maps `site_key` → `site_id`
 ### Supabase tables used
 - `sites` — site registry (site_key, id, deploy_hook_url)
 - `articles` — all content (news + settlements), filtered by `content_stage` and `news_type`
-- `subscribers` — email signups (upsert on site_id + email)
+- `subscribers` — email signups with unsubscribe support (upsert on site_id + email, status: active/unsubscribed)
 - `submissions` — form submissions (attorney portal, etc.)
 
 ### Content stages
@@ -37,6 +37,7 @@ Articles that fail fact-checking are regenerated (up to 2 retries) before being 
 ### Rendering model
 - **Prerendered** (static at build): homepage, category hubs, about, editorial-policy, static pages
 - **SSR** (`prerender = false`): settlement details, news details, news index, open settlements, brand pages, state pages, sitemap-articles.xml, content-stats API
+- **Hero image fallback**: settlement and news detail pages show a gradient placeholder when `hero_image` is null
 
 ## Page Types
 
@@ -53,6 +54,7 @@ Articles that fail fact-checking are regenerated (up to 2 retries) before being 
 | `/state/[slug]` | SSR | Settlements by US state location |
 | `/about` | Static | About page with Organization schema |
 | `/editorial-policy` | Static | Editorial policy |
+| `/unsubscribe` | Static | Unsubscribe from email alerts |
 | `/api/content-stats` | SSR | JSON endpoint with article counts and category breakdown |
 | `/sitemap-articles.xml` | SSR | Dynamic XML sitemap for all SSR pages |
 
@@ -64,6 +66,8 @@ Supabase client and data fetching. Key query functions:
 - `getArticleBySlug()` — single article lookup
 - `getOpenSettlements()` — settlements with active status or future claim deadlines
 - `getAllSettlements()` — all published settlements (for brand/state extraction)
+- `addSubscriber()` — upsert subscriber (re-subscribing resets status to active)
+- `unsubscribeEmail()` — mark subscriber as unsubscribed with timestamp
 
 ### `src/lib/structured-data.ts`
 JSON-LD schema generators:
@@ -107,7 +111,7 @@ JSON-LD schema generators:
 Settlement detail pages link to: category hub, brand page, state page, open settlements, similar settlements, cross-category links. Category hub pages link to: all their articles, largest settlements, latest news, cross-category links, open settlements. The footer includes links to open settlements and all categories.
 
 ### Validation
-`npm run validate:seo` runs `scripts/validate-seo.mjs` — 54 static checks across all page templates verifying schemas, internal links, components, and sitemap configuration.
+`npm run validate:seo` runs `scripts/validate-seo.mjs` — 58 static checks across all page templates verifying schemas, internal links, components, sitemap configuration, and hero image fallbacks.
 
 ## Content Pipeline
 
@@ -120,7 +124,7 @@ The `CONTENT_TYPE` input controls what gets generated: `mixed` (default, roughly
 3-job pipeline:
 1. **generate** — Perplexity researches → Claude Haiku drafts article (`scripts/generate_articles.py`)
 2. **review** — fact-check → fact-update → human-tone rewrite (Claude Sonnet)
-3. **images** — Claude Haiku writes prompt → DALL-E 3 generates hero image → Cloudflare Pages rebuild via deploy hook
+3. **images** — Claude Haiku writes prompt → DALL-E 3 generates hero image (2 retry attempts per image, strict gate blocks deploy if ANY image fails) → Cloudflare Pages rebuild via deploy hook
 
 ### Deduplication
 Keyword-based Jaccard similarity (`scripts/lib/dedup.py`). Rejects articles with title or case name >= 40% overlap with existing articles.
