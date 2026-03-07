@@ -47,24 +47,46 @@ def _jaccard(a: set, b: set) -> float:
     return len(a & b) / len(a | b)
 
 
-def is_duplicate(new_title: str, new_case_name: Optional[str], existing_entries: list) -> bool:
+def is_duplicate(
+    new_title: str,
+    new_case_name: Optional[str],
+    existing_entries: list,
+    companies: Optional[set[str]] = None,
+) -> bool:
     """
     Check if a new article is a duplicate of any existing article.
-    Uses pairwise keyword comparison across titles and case names.
+    Uses pairwise keyword comparison across titles and case names,
+    plus optional company-name substring matching.
 
     Args:
         new_title: Title of the new article
         new_case_name: Case name of the new article (can be None)
         existing_entries: List of dicts with 'title' and optional 'case_name' keys
+        companies: Optional set of known defendant company names from
+                   build_avoidance_data(). If any company appears as a substring
+                   in new_title or new_case_name (case-insensitive), returns True.
 
     Returns:
         True if the article appears to be a duplicate
     """
+    THRESHOLD = 0.35
+
     new_title_kw = _extract_keywords(new_title)
     new_case_kw = _extract_keywords(new_case_name) if new_case_name else set()
 
     if not new_title_kw and not new_case_kw:
         return False
+
+    # Company-name substring check — catches rewording of the same defendant
+    if companies:
+        title_lower = new_title.lower()
+        case_lower = new_case_name.lower() if new_case_name else ""
+        for company in companies:
+            company_lower = company.lower()
+            if len(company_lower) < 3:
+                continue
+            if company_lower in title_lower or company_lower in case_lower:
+                return True
 
     for existing in existing_entries:
         ex_title_kw = _extract_keywords(existing.get("title", ""))
@@ -75,15 +97,15 @@ def is_duplicate(new_title: str, new_case_name: Optional[str], existing_entries:
 
         # Check all pairwise comparisons — any high similarity means duplicate
         # 1. New title vs existing title
-        if _jaccard(new_title_kw, ex_title_kw) >= 0.4:
+        if _jaccard(new_title_kw, ex_title_kw) >= THRESHOLD:
             return True
 
         # 2. New title vs existing case name
-        if _jaccard(new_title_kw, ex_case_kw) >= 0.4:
+        if _jaccard(new_title_kw, ex_case_kw) >= THRESHOLD:
             return True
 
         # 3. New case name vs existing title
-        if _jaccard(new_case_kw, ex_title_kw) >= 0.4:
+        if _jaccard(new_case_kw, ex_title_kw) >= THRESHOLD:
             return True
 
         # 4. New case name vs existing case name (2+ keyword overlap = same party)

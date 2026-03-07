@@ -40,7 +40,7 @@ from supabase import create_client
 
 # Add scripts/lib to path for shared utilities
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
-from dedup import is_duplicate, load_existing_articles, check_research_context, build_avoidance_data, extract_keywords
+from dedup import is_duplicate, load_existing_articles, check_research_context, build_avoidance_data, extract_keywords, is_topic_covered
 
 
 # =============================================================================
@@ -707,6 +707,15 @@ def main():
             if research_is_dup:
                 continue
 
+            # Step 1b: Pre-generation topic coverage check
+            # Catches cases where check_research_context() misses overlap because
+            # the research doesn't use exact "X v. Y" formatting
+            topic_covered, topic_match = is_topic_covered(research_context, cat_avoidance)
+            if topic_covered:
+                print(f"  ⚠ Research topic already covered: {topic_match[:70] if topic_match else 'unknown'} — skipping")
+                articles_failed += 1
+                continue
+
             # Step 2: Build prompt with research context injected
             article_prompt = article_prompt_template.replace("{{category}}", category)
             article_prompt = article_prompt.replace("{{article_number}}", str(i + 1))
@@ -738,11 +747,21 @@ def main():
             print(f"  Source: {source_url[:60]}..." if len(str(source_url)) > 60 else f"  Source: {source_url}")
             print(f"  Tokens: {input_tokens} in / {output_tokens} out")
 
-            # Post-generation duplicate check
-            if is_duplicate(title, case_name, existing_articles):
-                print(f"  ⚠ DUPLICATE detected — skipping article")
+            # Post-generation duplicate check — title/case_name Jaccard + company name match
+            if is_duplicate(title, case_name, existing_articles, companies=avoidance_data.get("companies")):
+                print(f"  ⚠ DUPLICATE detected (title/company match) — skipping article")
                 articles_failed += 1
                 continue
+
+            # Post-generation content body check — catches cases where the title is
+            # worded differently but the article body references the same case
+            content_body = article_data.get("content", "")
+            if content_body:
+                body_is_dup, body_match = check_research_context(content_body, existing_articles)
+                if body_is_dup:
+                    print(f"  ⚠ DUPLICATE detected in content body (matches: {body_match[:70] if body_match else 'unknown'}) — skipping")
+                    articles_failed += 1
+                    continue
 
             write_site_article(site_db, article_id, article_data, category, site_db_site_id, article_content_type)
             print(f"  ✓ Site DB: written")
