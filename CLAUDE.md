@@ -96,6 +96,12 @@ JSON-LD schema generators:
 - `extractState()` / `extractStates()` — matches US states from article location fields
 - `US_STATES` — complete slug→name map of all 50 states + DC
 
+## Settlement Closed State
+Settlements are automatically marked "Closed" at render time when `claim_deadline` exists and is in the past — no DB changes needed. This affects:
+- **CaseStatusTracker** — 5th "Closed" step with red styling and lock icon; all previous steps shown as completed (blue)
+- **SettlementDataBlock** — Status badge overrides to red "Closed"; claim CTA swaps to emerald "Sign Up for Alerts"
+- **Settlement detail page** — Mobile and inline CTAs swap to signup buttons; JSON-LD `case_status` overrides to "closed"
+
 ## SEO Infrastructure
 
 ### Structured data on every page

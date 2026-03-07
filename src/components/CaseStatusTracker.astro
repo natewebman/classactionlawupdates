@@ -1,15 +1,25 @@
 ---
 interface Props {
   status: string;
+  claimDeadline?: string | null;
 }
 
-const { status } = Astro.props;
+const { status, claimDeadline } = Astro.props;
+
+const isClosed = (() => {
+  if (!claimDeadline) return false;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const deadline = new Date(claimDeadline + 'T00:00:00');
+  return deadline.getTime() < now.getTime();
+})();
 
 const steps = [
   { key: 'filed', label: 'Lawsuit Filed' },
   { key: 'certified', label: 'Class Certified' },
   { key: 'approved', label: 'Settlement Approved' },
   { key: 'open', label: 'Open for Claims' },
+  { key: 'closed', label: 'Closed' },
 ];
 
 const statusMap: Record<string, number> = {
@@ -23,6 +33,11 @@ const currentStep = statusMap[status] ?? 0;
 
 function iconBoxClasses(i: number): string {
   const base = 'w-16 h-16 sm:w-20 sm:h-20 rounded-xl flex items-center justify-center border-2 transition-all';
+  if (isClosed) {
+    if (i === 4) return `${base} bg-red-50 border-red-400 shadow-md`;
+    return `${base} bg-blue-50 border-blue-400`;
+  }
+  if (i === 4) return `${base} bg-gray-50 border-gray-200`;
   if (i === currentStep) return `${base} bg-blue-50 border-blue-500 shadow-md`;
   if (i <= currentStep) return `${base} bg-blue-50 border-blue-400`;
   return `${base} bg-gray-50 border-gray-200`;
@@ -30,20 +45,36 @@ function iconBoxClasses(i: number): string {
 
 function iconClasses(i: number): string {
   const base = 'w-8 h-8 sm:w-9 sm:h-9';
+  if (isClosed) {
+    if (i === 4) return `${base} text-red-500`;
+    return `${base} text-blue-600`;
+  }
+  if (i === 4) return `${base} text-gray-400`;
   return i <= currentStep ? `${base} text-blue-600` : `${base} text-gray-400`;
 }
 
 function labelClasses(i: number): string {
   const base = 'text-xs sm:text-sm font-medium mt-2 text-center leading-tight';
+  if (isClosed) {
+    if (i === 4) return `${base} text-red-700 font-semibold`;
+    return `${base} text-gray-700`;
+  }
+  if (i === 4) return `${base} text-gray-400`;
   if (i === currentStep) return `${base} text-gray-900 font-semibold`;
   if (i <= currentStep) return `${base} text-gray-700`;
   return `${base} text-gray-400`;
 }
 
 function barWidth(i: number): string {
+  if (isClosed) return '100%';
   if (i < currentStep) return '100%';
   if (i === currentStep) return '50%';
   return '0%';
+}
+
+function barColor(i: number): string {
+  if (isClosed && i === 3) return 'bg-red-500';
+  return 'bg-blue-500';
 }
 ---
 
@@ -72,6 +103,11 @@ function barWidth(i: number): string {
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
             </svg>
           )}
+          {i === 4 && (
+            <svg class={iconClasses(i)} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+          )}
         </div>
         <span class={labelClasses(i)}>
           {step.label}
@@ -80,11 +116,11 @@ function barWidth(i: number): string {
     ))}
 
     {/* Progress bars between steps */}
-    <div class="absolute top-8 sm:top-10 left-0 right-0 flex z-0" style="padding: 0 12.5%;">
-      {[0, 1, 2].map((i) => (
+    <div class="absolute top-8 sm:top-10 left-0 right-0 flex z-0" style="padding: 0 10%;">
+      {[0, 1, 2, 3].map((i) => (
         <div class="flex-1 h-1.5 mx-1 rounded-full overflow-hidden bg-gray-200">
           <div
-            class="h-full bg-blue-500 rounded-full transition-all duration-500"
+            class={`h-full rounded-full transition-all duration-500 ${barColor(i)}`}
             style={`width: ${barWidth(i)};`}
           />
         </div>
