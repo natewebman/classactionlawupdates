@@ -40,7 +40,7 @@ from supabase import create_client
 
 # Add scripts/lib to path for shared utilities
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
-from dedup import is_duplicate, load_existing_articles
+from dedup import is_duplicate, load_existing_articles, check_research_context
 
 
 # =============================================================================
@@ -258,7 +258,7 @@ def research_topic(category: str, existing_titles: list[str] = None) -> str:
     """Use Perplexity to research real lawsuits in a category. Returns structured research."""
     avoid_section = ""
     if existing_titles:
-        titles_sample = existing_titles[:20]
+        titles_sample = existing_titles[:100]
         avoid_section = (
             "\n\nIMPORTANT: Do NOT research any of these lawsuits — they are already covered on our site:\n"
             + "\n".join(f"- {t}" for t in titles_sample)
@@ -298,7 +298,7 @@ def research_settlement(category: str, topic_url: str = "", topic_idea: str = ""
     """Use Perplexity to research real settlements. Returns structured research."""
     avoid_section = ""
     if existing_titles and not topic_url and not topic_idea:
-        titles_sample = existing_titles[:20]
+        titles_sample = existing_titles[:100]
         avoid_section = (
             "\n\nIMPORTANT: Do NOT research any of these settlements — they are already covered on our site:\n"
             + "\n".join(f"- {t}" for t in titles_sample)
@@ -659,6 +659,26 @@ def main():
             else:
                 research_context = research_topic(category, existing_titles)
             print(f"  ✓ Research complete ({len(research_context)} chars)")
+
+            # Step 1b: Pre-generation duplicate check on research context
+            is_dup, matched_title = check_research_context(research_context, existing_articles)
+            if is_dup:
+                print(f"  ⚠ Research overlaps existing article: {matched_title[:70]}")
+                print(f"  ↻ Retrying research with matched topic in avoidance list...")
+                # Add the matched title to avoidance and retry once
+                retry_titles = existing_titles + [matched_title] if matched_title else existing_titles
+                if article_content_type == "settlement":
+                    research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA, retry_titles)
+                else:
+                    research_context = research_topic(category, retry_titles)
+                print(f"  ✓ Retry research complete ({len(research_context)} chars)")
+
+                # Check again after retry
+                is_dup2, matched_title2 = check_research_context(research_context, existing_articles)
+                if is_dup2:
+                    print(f"  ✗ Still overlaps existing article: {matched_title2[:70]} — skipping")
+                    articles_failed += 1
+                    continue
 
             # Step 2: Build prompt with research context injected
             article_prompt = article_prompt_template.replace("{{category}}", category)

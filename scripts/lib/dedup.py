@@ -95,6 +95,63 @@ def is_duplicate(new_title: str, new_case_name: Optional[str], existing_entries:
     return False
 
 
+def check_research_context(research_text: str, existing_articles: list[dict]) -> tuple[bool, str | None]:
+    """
+    Check if Perplexity research covers a topic already in the database.
+
+    Extracts candidate case names ("X v. Y" patterns) and labeled entities
+    from the research text, then checks against existing article titles
+    and case names using keyword similarity.
+
+    Returns (is_duplicate, matched_existing_title) so the caller can log
+    which existing article was matched.
+    """
+    candidates: list[str] = []
+
+    # 1. Case name patterns: "X v. Y" or "X vs. Y"
+    for m in re.finditer(r'[A-Z][\w.\s&\'-]+?\s+(?:v\.|vs\.?)\s+[A-Z][\w.\s&\'-]+', research_text):
+        text = m.group().strip()
+        if len(text) > 10:
+            candidates.append(text)
+
+    # 2. Labeled fields: "Case: ...", "Defendant: ...", etc.
+    for m in re.finditer(
+        r'(?:case\s*(?:name)?|defendant|company|plaintiff)\s*[:\-]\s*([^\n]{5,100})',
+        research_text, re.IGNORECASE,
+    ):
+        candidates.append(m.group(1).strip().rstrip('.'))
+
+    if not candidates:
+        return False, None
+
+    for candidate in candidates:
+        cand_kw = _extract_keywords(candidate)
+        if len(cand_kw) < 2:
+            continue
+
+        for existing in existing_articles:
+            ex_title_kw = _extract_keywords(existing.get("title", ""))
+            ex_case_kw = (
+                _extract_keywords(existing.get("case_name", ""))
+                if existing.get("case_name")
+                else set()
+            )
+
+            # Title keyword overlap
+            if _jaccard(cand_kw, ex_title_kw) >= 0.4:
+                return True, existing.get("title")
+
+            # Case name keyword overlap
+            if _jaccard(cand_kw, ex_case_kw) >= 0.4:
+                return True, existing.get("title")
+
+            # 2+ shared keywords between case names = likely same parties
+            if ex_case_kw and len(cand_kw & ex_case_kw) >= 2:
+                return True, existing.get("title")
+
+    return False, None
+
+
 def load_existing_articles(site_db) -> list[dict]:
     """Load existing article titles and case names from the database for dedup."""
     try:
