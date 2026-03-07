@@ -111,6 +111,8 @@ const { showHeader = true } = Astro.props;
     const formData = new FormData(form);
     const email = formData.get('email') as string;
     const name = formData.get('name') as string;
+    const state = formData.get('state') as string;
+    const selectedTopics = formData.getAll('topics') as string[];
 
     if (!email) return;
 
@@ -120,6 +122,8 @@ const { showHeader = true } = Astro.props;
     const result = await addSubscriber({
       email,
       name: name || undefined,
+      state: state || undefined,
+      topics: selectedTopics.length > 0 ? selectedTopics : undefined,
       source: 'homepage_form',
       utm_source: params.get('utm_source') ?? undefined,
       utm_campaign: params.get('utm_campaign') ?? undefined,

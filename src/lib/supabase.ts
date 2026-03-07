@@ -182,16 +182,24 @@ export async function getAllSettlements(opts?: { limit?: number }): Promise<Arti
 export async function addSubscriber(fields: {
   email: string;
   name?: string;
+  state?: string;
+  topics?: string[];
   source?: string;
   utm_source?: string;
   utm_campaign?: string;
 }): Promise<{ success: boolean; error?: string }> {
   const siteId = await getSiteId();
+  // NOTE: state (text) and topics (text[] or jsonb) columns must exist on the
+  // subscribers table in Supabase. Add them if they don't exist yet:
+  //   ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS state text;
+  //   ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS topics jsonb;
   const { error } = await supabase.from('subscribers').upsert(
     {
       site_id: siteId,
       email: fields.email,
       name: fields.name ?? null,
+      state: fields.state ?? null,
+      topics: fields.topics ?? null,
       source: fields.source ?? 'website_form',
       utm_source: fields.utm_source ?? null,
       utm_campaign: fields.utm_campaign ?? null,
