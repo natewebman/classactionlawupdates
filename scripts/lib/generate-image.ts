@@ -2,7 +2,7 @@
  * AI image generation pipeline for article hero images.
  *
  * 1. Claude Haiku generates a detailed image prompt from article metadata.
- * 2. OpenAI DALL-E 3 generates the image.
+ * 2. OpenAI GPT Image 1.5 generates a photorealistic image.
  * 3. The image is downloaded and uploaded to Supabase Storage.
  * 4. The article record is updated with the public URL, alt text, and filename.
  */
@@ -38,13 +38,16 @@ export async function generateImagePrompt(article: {
     messages: [
       {
         role: "user",
-        content: `You are an expert editorial photo director. Given the article details below, write a single, detailed image-generation prompt (2-3 sentences) for a photojournalistic, editorial-style hero image.
+        content: `You are an expert editorial photo director. Given the article details below, write a single, detailed image-generation prompt (2-3 sentences) for a photorealistic hero image that looks like an actual unedited photograph.
 
 Rules:
-- Photorealistic, high-quality, dramatic lighting
+- Photorealistic photograph taken with a professional DSLR camera
+- Natural lighting, real skin textures, authentic environments
+- No illustration, no painterly style, no smoky or surreal effects, no digital artifacts
+- Should look like an actual unedited photograph captured by a documentary photographer
 - NO text, logos, watermarks, or identifiable human faces
 - Evoke the legal/financial/consumer-protection theme
-- Include specific compositional details (camera angle, depth of field, lighting)
+- Include specific compositional details (camera angle, depth of field, lens type, lighting conditions)
 - Suitable for a legal news website
 
 Article title: ${article.title}
@@ -63,7 +66,7 @@ Respond with ONLY the image prompt, nothing else.`,
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 – Generate the image via OpenAI DALL-E 3
+// Step 2 – Generate the image via OpenAI GPT Image 1.5
 // ---------------------------------------------------------------------------
 
 export async function generateImage(
@@ -72,12 +75,12 @@ export async function generateImage(
   const openai = new OpenAI({ apiKey: requireEnv("OPENAI_API_KEY") });
 
   const response = await openai.images.generate({
-    model: "dall-e-3",
-    prompt: `Photojournalistic editorial hero image for a legal news article. NO text, NO logos, NO watermarks, NO identifiable human faces. ${prompt}`,
+    model: "gpt-image-1.5",
+    prompt: `Photorealistic photograph taken with a professional DSLR camera for a legal news article. Natural lighting, real textures, authentic environment. No illustration, no painterly style, no smoky or surreal effects, no digital artifacts. Should look like an actual unedited photograph captured by a documentary photographer. NO text, NO logos, NO watermarks, NO identifiable human faces. ${prompt}`,
     n: 1,
-    size: "1792x1024", // Landscape, closest to 16:9
-    quality: "standard",
-    response_format: "b64_json",
+    size: "1536x1024", // Landscape
+    quality: "medium",
+    output_format: "png",
   });
 
   const imageData = response.data[0];
@@ -169,10 +172,10 @@ export async function generateArticleImage(article: {
   // Step 1: Generate prompt with Claude Haiku
   const prompt = await generateImagePrompt(article);
 
-  // Step 2: Generate image with OpenAI DALL-E 3
+  // Step 2: Generate image with OpenAI GPT Image 1.5
   const { data: imageData, mediaType } = await generateImage(prompt);
 
-  // Filename is always .png with DALL-E 3
+  // Filename is always .png (output_format: 'png')
   const filename = `${article.slug}.png`;
 
   // Step 3: Persist to Supabase Storage

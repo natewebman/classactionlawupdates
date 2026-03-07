@@ -8,7 +8,7 @@ A class action lawsuit news and settlement tracker that automatically generates,
 - **Styling:** Tailwind CSS 3.4
 - **Database:** [Supabase](https://supabase.com/) (PostgreSQL + Storage)
 - **Hosting:** Cloudflare Pages
-- **Content AI:** Claude (Anthropic), Perplexity, DALL-E 3 (OpenAI)
+- **Content AI:** Claude (Anthropic), Perplexity, GPT Image 1.5 (OpenAI)
 
 ## Local Development
 
@@ -73,11 +73,11 @@ public/
 scripts/
   generate_articles.py          # Unified article generation (news + settlements)
   review_pipeline.py            # Fact-check, update, rewrite pipeline
-  generate-missing-images.ts    # Hero image generation (DALL-E 3)
+  generate-missing-images.ts    # Hero image generation (GPT Image 1.5)
   validate-seo.mjs             # SEO validation script (58 checks)
   prompts/                      # LLM prompt templates
   lib/
-    generate-image.ts           # DALL-E 3 image generation utilities
+    generate-image.ts           # GPT Image 1.5 image generation utilities
     dedup.py                    # Keyword-based duplicate detection
 ```
 
@@ -185,7 +185,7 @@ Articles are generated and published via GitHub Actions in a 4-step pipeline:
 ```
 1. GENERATE        Perplexity researches real lawsuits → Claude Haiku drafts article
 2. REVIEW          Fact-check → Fact-update → Human-tone rewrite (Claude Sonnet)
-3. IMAGES          Claude Haiku writes image prompt → DALL-E 3 generates hero image
+3. IMAGES          Claude Haiku writes image prompt → GPT Image 1.5 generates photorealistic hero image
                    (2 retry attempts per image; ANY failure blocks deploy)
 4. DEPLOY          Cloudflare Pages rebuild via deploy hook
 ```
@@ -238,7 +238,7 @@ Categories are auto-balanced — the script queries existing article counts per 
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude API key |
 | `PERPLEXITY_API_KEY` | Perplexity API key |
-| `OPENAI_API_KEY` | OpenAI API key (DALL-E 3) |
+| `OPENAI_API_KEY` | OpenAI API key (GPT Image 1.5) |
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_KEY` | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (storage uploads) |

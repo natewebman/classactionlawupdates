@@ -8,7 +8,7 @@ Class action lawsuit news and settlement tracker. Auto-generates, fact-checks, a
 - **Supabase Project:** `dwyomiuzuwkmfwfwxcfx`
 - **Hosting:** Cloudflare Pages (static + SSR hybrid)
 - **Framework:** Astro 5.7 + Tailwind CSS 3.4
-- **Content AI:** Claude (Anthropic), Perplexity, DALL-E 3 (OpenAI)
+- **Content AI:** Claude (Anthropic), Perplexity, GPT Image 1.5 (OpenAI)
 
 ## Local Development
 ```bash
@@ -124,7 +124,7 @@ The `CONTENT_TYPE` input controls what gets generated: `mixed` (default, roughly
 3-job pipeline:
 1. **generate** — Perplexity researches → Claude Haiku drafts article (`scripts/generate_articles.py`)
 2. **review** — fact-check → fact-update → human-tone rewrite (Claude Sonnet)
-3. **images** — Claude Haiku writes prompt → DALL-E 3 generates hero image (2 retry attempts per image, strict gate blocks deploy if ANY image fails) → Cloudflare Pages rebuild via deploy hook
+3. **images** — Claude Haiku writes prompt → GPT Image 1.5 generates photorealistic hero image (2 retry attempts per image, strict gate blocks deploy if ANY image fails) → Cloudflare Pages rebuild via deploy hook
 
 ### Deduplication
 Keyword-based Jaccard similarity (`scripts/lib/dedup.py`). Rejects articles with title or case name >= 40% overlap with existing articles.
@@ -142,7 +142,7 @@ Push to `main` triggers Cloudflare Pages build. The pipeline also triggers a reb
 ### Scripts (GitHub Actions secrets)
 - `ANTHROPIC_API_KEY` — Claude API key
 - `PERPLEXITY_API_KEY` — Perplexity API key
-- `OPENAI_API_KEY` — OpenAI API key (DALL-E 3)
+- `OPENAI_API_KEY` — OpenAI API key (GPT Image 1.5)
 - `SUPABASE_URL` — Supabase project URL
 - `SUPABASE_KEY` — Supabase anon key
 - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (storage uploads)
