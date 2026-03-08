@@ -34,6 +34,22 @@ export const GET: APIRoute = async () => {
     <priority>0.8</priority>
   </url>`);
 
+  // Claim deadlines ending soon page
+  landingPages.push(`  <url>
+    <loc>https://classactionlawupdates.com/claim-deadlines-ending-soon</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>`);
+
+  // Settlement database page
+  landingPages.push(`  <url>
+    <loc>https://classactionlawupdates.com/class-action-settlements-database</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>`);
+
   // Brand pages
   const allSettlements = await getAllSettlements({ limit: 500 });
   const brands = extractBrands(allSettlements);

@@ -109,6 +109,8 @@ Two sitemaps work together:
 2. **`/sitemap-articles.xml`** — custom SSR endpoint (`src/pages/sitemap-articles.xml.ts`) for dynamic pages:
    - All article pages (`/settlements/{slug}`, `/news/{slug}`) — priority 0.6, weekly
    - Open settlements page — priority 0.8, daily
+   - Claim deadlines ending soon page — priority 0.8, daily
+   - Settlement database page — priority 0.8, weekly
    - Brand pages (`/brand/{slug}`) — priority 0.8, daily
    - State pages (`/state/{slug}`) — priority 0.8, daily
 
@@ -160,7 +162,7 @@ Footer → /open-class-action-settlements, /about, /editorial-policy, all catego
 
 ### SEO Validation
 
-Run `npm run validate:seo` to check 58 SEO requirements across all page templates:
+Run `npm run validate:seo` to check 67 SEO requirements across all page templates:
 
 - Article structured data (Article, NewsArticle, FAQPage schemas)
 - Organization schema on all pages
@@ -169,9 +171,9 @@ Run `npm run validate:seo` to check 58 SEO requirements across all page template
 - Sitemap and robots.txt configuration
 - Internal link structure (category links, cross-links, similar settlements)
 - Category hub components (intro, largest settlements, CollectionPage schema)
-- High-intent landing pages (open settlements, brand, state)
+- High-intent landing pages (open settlements, deadlines ending soon, settlement database, brand, state)
 - Brand/state extraction module
-- Sitemap inclusion of all page types
+- Sitemap inclusion of all page types (including deadlines and database pages)
 - Hero image fallback (gradient placeholders on detail pages)
 
 ### Page Rendering

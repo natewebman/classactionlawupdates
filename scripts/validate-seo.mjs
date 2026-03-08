@@ -392,6 +392,55 @@ try {
   fail('Open Settlements page not found (src/pages/open-class-action-settlements.astro)');
 }
 
+// Claim Deadlines Ending Soon page
+try {
+  const deadlinesPage = readSource('src/pages/claim-deadlines-ending-soon.astro');
+  if (deadlinesPage.includes('getExpiringSettlements')) {
+    pass('Deadlines page uses getExpiringSettlements query');
+  } else {
+    fail('Deadlines page missing getExpiringSettlements query');
+  }
+  if (deadlinesPage.includes('getItemList')) {
+    pass('Deadlines page includes ItemList schema');
+  } else {
+    fail('Deadlines page missing ItemList schema');
+  }
+  if (deadlinesPage.includes('CategoryCrossLinks')) {
+    pass('Deadlines page includes CategoryCrossLinks');
+  } else {
+    warn('Deadlines page missing CategoryCrossLinks');
+  }
+} catch {
+  fail('Deadlines page not found (src/pages/claim-deadlines-ending-soon.astro)');
+}
+
+// Settlement Database page
+try {
+  const dbPage = readSource('src/pages/class-action-settlements-database.astro');
+  if (dbPage.includes('getAllSettlements')) {
+    pass('Database page uses getAllSettlements query');
+  } else {
+    fail('Database page missing getAllSettlements query');
+  }
+  if (dbPage.includes('getCollectionPage')) {
+    pass('Database page includes CollectionPage schema');
+  } else {
+    fail('Database page missing CollectionPage schema');
+  }
+  if (dbPage.includes('getItemList')) {
+    pass('Database page includes ItemList schema');
+  } else {
+    fail('Database page missing ItemList schema');
+  }
+  if (dbPage.includes('CategoryCrossLinks')) {
+    pass('Database page includes CategoryCrossLinks');
+  } else {
+    warn('Database page missing CategoryCrossLinks');
+  }
+} catch {
+  fail('Database page not found (src/pages/class-action-settlements-database.astro)');
+}
+
 // Brand pages
 try {
   const brandPage = readSource('src/pages/brand/[slug].astro');
@@ -501,6 +550,18 @@ if (sitemapArticles.includes('open-class-action-settlements')) {
   pass('Sitemap includes open settlements page URL');
 } else {
   fail('Sitemap missing open settlements page URL');
+}
+
+if (sitemapArticles.includes('claim-deadlines-ending-soon')) {
+  pass('Sitemap includes deadlines ending soon page URL');
+} else {
+  fail('Sitemap missing deadlines ending soon page URL');
+}
+
+if (sitemapArticles.includes('class-action-settlements-database')) {
+  pass('Sitemap includes settlement database page URL');
+} else {
+  fail('Sitemap missing settlement database page URL');
 }
 
 // Footer / site config includes open settlements link

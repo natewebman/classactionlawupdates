@@ -37,7 +37,7 @@ Articles that fail fact-checking are regenerated (up to 2 retries) before being 
 
 ### Rendering model
 - **Prerendered** (static at build): homepage, category hubs, about, editorial-policy, static pages
-- **SSR** (`prerender = false`): settlement details, news details, news index, open settlements, brand pages, state pages, sitemap-articles.xml, content-stats API
+- **SSR** (`prerender = false`): settlement details, news details, news index, open settlements, deadlines ending soon, settlement database, brand pages, state pages, sitemap-articles.xml, content-stats API
 - **Hero image fallback**: settlement and news detail pages show a gradient placeholder when `hero_image` is null
 
 ## Page Types
@@ -114,14 +114,14 @@ Settlements are automatically marked "Closed" at render time when `claim_deadlin
 
 ### Sitemaps
 - `/sitemap-index.xml` — @astrojs/sitemap for prerendered pages (homepage priority 1.0, category hubs 0.8)
-- `/sitemap-articles.xml` — custom SSR endpoint for articles (0.6), brand/state/open-settlements pages (0.8)
+- `/sitemap-articles.xml` — custom SSR endpoint for articles (0.6), brand/state/open-settlements/deadlines/database pages (0.8)
 - Both referenced in `public/robots.txt`
 
 ### Internal linking
-Settlement detail pages link to: category hub, brand page, state page, open settlements, similar settlements, cross-category links. Category hub pages link to: all their articles, largest settlements, latest news, cross-category links, open settlements. The footer includes links to open settlements and all categories.
+Settlement detail pages link to: category hub, brand page, state page, open settlements, similar settlements, cross-category links. Category hub pages link to: all their articles, largest settlements, latest news, cross-category links, open settlements. Open settlements page links to: deadlines ending soon, settlement database. The footer includes links to open settlements, settlement database, and all categories.
 
 ### Validation
-`npm run validate:seo` runs `scripts/validate-seo.mjs` — 58 static checks across all page templates verifying schemas, internal links, components, sitemap configuration, and hero image fallbacks.
+`npm run validate:seo` runs `scripts/validate-seo.mjs` — 67 static checks across all page templates verifying schemas, internal links, components, sitemap configuration, and hero image fallbacks.
 
 ## Content Pipeline
 
