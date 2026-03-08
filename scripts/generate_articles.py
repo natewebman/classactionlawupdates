@@ -591,7 +591,7 @@ def generate_article(client: anthropic.Anthropic, system_prompt: str, article_pr
         try:
             response = client.messages.create(
                 model=MODEL,
-                max_tokens=8192,
+                max_tokens=16384,
                 system=system_prompt,
                 messages=[{"role": "user", "content": article_prompt}],
             )
@@ -607,6 +607,13 @@ def generate_article(client: anthropic.Anthropic, system_prompt: str, article_pr
                 time.sleep(wait)
             else:
                 raise
+
+    # Check for truncated response
+    if response.stop_reason == "max_tokens":
+        raise ValueError(
+            f"Claude response was truncated (hit max_tokens limit). "
+            f"Output tokens used: {response.usage.output_tokens}"
+        )
 
     raw_text = ""
     for block in response.content:
