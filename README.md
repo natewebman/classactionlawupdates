@@ -157,7 +157,8 @@ Homepage
 /claim-deadlines-ending-soon → /settlements/{slug}, /open-class-action-settlements, /class-action-settlements-database
 /class-action-settlements-database → /settlements/{slug}, /brand/{slug}, /state/{slug}, /open-class-action-settlements, /claim-deadlines-ending-soon
 
-Footer → /open-class-action-settlements, /about, /editorial-policy, all categories
+Header → /open-class-action-settlements, /claim-deadlines-ending-soon, /class-action-settlements-database, all categories, /news
+Footer → /open-class-action-settlements, /class-action-settlements-database, /about, /editorial-policy, all categories
 ```
 
 ### SEO Validation
