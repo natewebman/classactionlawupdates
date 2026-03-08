@@ -1,6 +1,7 @@
 ---
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import StickyBanner from '../components/StickyBanner.astro';
 import '../styles/global.css';
 import { siteConfig } from '../site.config';
 import { getBreadcrumbList, getOrganization } from '../lib/structured-data';
@@ -75,5 +76,6 @@ const orgSchema = { '@context': 'https://schema.org', ...getOrganization() };
       <slot />
     </main>
     <Footer />
+    <StickyBanner />
   </body>
 </html>

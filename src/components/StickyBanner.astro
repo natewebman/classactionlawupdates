@@ -1,0 +1,287 @@
+---
+---
+
+<div
+  id="sticky-banner"
+  class="sticky-banner"
+  role="complementary"
+  aria-label="Email signup banner"
+>
+  <div class="sticky-banner__inner">
+    <div class="sticky-banner__text">
+      <h2 class="sticky-banner__headline">Claim Your Free Cash!</h2>
+      <p class="sticky-banner__subtext">
+        Join countless subscribers who got settlements from being notified via ClassActionLaw directly to their inbox.
+      </p>
+    </div>
+
+    <form id="sticky-banner-form" class="sticky-banner__form">
+      <div class="sticky-banner__input-group">
+        <input
+          type="email"
+          id="sticky-banner-email"
+          placeholder="john@example.com"
+          required
+          autocomplete="email"
+          class="sticky-banner__input"
+        />
+        <button type="submit" id="sticky-banner-btn" class="sticky-banner__button">
+          Subscribe
+        </button>
+      </div>
+    </form>
+
+    <p id="sticky-banner-success" class="sticky-banner__message sticky-banner__message--success" hidden>
+      You're in! Check your inbox.
+    </p>
+    <p id="sticky-banner-error" class="sticky-banner__message sticky-banner__message--error" hidden>
+      Something went wrong. Try again.
+    </p>
+  </div>
+
+  <button
+    id="sticky-banner-close"
+    class="sticky-banner__close"
+    aria-label="Dismiss signup banner"
+    type="button"
+  >
+    &times;
+  </button>
+</div>
+
+<style>
+  .sticky-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: #162c54;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+    padding: 20px 24px;
+    transform: translateY(100%);
+    transition: transform 0.5s ease;
+  }
+
+  .sticky-banner--visible {
+    transform: translateY(0);
+  }
+
+  .sticky-banner__inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .sticky-banner__text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .sticky-banner__headline {
+    font-family: "Source Serif 4", Georgia, serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0 0 4px 0;
+    line-height: 1.3;
+  }
+
+  .sticky-banner__subtext {
+    font-family: "Source Sans 3", system-ui, sans-serif;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .sticky-banner__form {
+    flex-shrink: 0;
+  }
+
+  .sticky-banner__input-group {
+    display: flex;
+    gap: 8px;
+  }
+
+  .sticky-banner__input {
+    font-family: "Source Sans 3", system-ui, sans-serif;
+    font-size: 16px;
+    padding: 12px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    outline: none;
+    min-width: 240px;
+    color: #1f2937;
+  }
+
+  .sticky-banner__input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+  }
+
+  .sticky-banner__button {
+    font-family: "Source Sans 3", system-ui, sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 12px 24px;
+    background: #1e3a6e;
+    color: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s ease;
+  }
+
+  .sticky-banner__button:hover {
+    background: #253f72;
+  }
+
+  .sticky-banner__button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .sticky-banner__message {
+    font-family: "Source Sans 3", system-ui, sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  .sticky-banner__message--success {
+    color: #34d399;
+  }
+
+  .sticky-banner__message--error {
+    color: #f87171;
+  }
+
+  .sticky-banner__close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: color 0.2s ease;
+  }
+
+  .sticky-banner__close:hover {
+    color: rgba(255, 255, 255, 1);
+  }
+
+  /* Mobile: ≤768px */
+  @media (max-width: 768px) {
+    .sticky-banner {
+      padding: 16px 16px 20px;
+    }
+
+    .sticky-banner__inner {
+      flex-direction: column;
+      text-align: center;
+      gap: 12px;
+    }
+
+    .sticky-banner__form {
+      width: 100%;
+    }
+
+    .sticky-banner__input-group {
+      flex-direction: column;
+      width: 100%;
+    }
+
+    .sticky-banner__input {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .sticky-banner__button {
+      width: 100%;
+    }
+  }
+</style>
+
+<script>
+  import { addSubscriber } from '../lib/supabase';
+
+  const banner = document.getElementById('sticky-banner');
+  const form = document.getElementById('sticky-banner-form') as HTMLFormElement | null;
+  const emailInput = document.getElementById('sticky-banner-email') as HTMLInputElement | null;
+  const submitBtn = document.getElementById('sticky-banner-btn') as HTMLButtonElement | null;
+  const closeBtn = document.getElementById('sticky-banner-close');
+  const successMsg = document.getElementById('sticky-banner-success');
+  const errorMsg = document.getElementById('sticky-banner-error');
+
+  if (banner && form && emailInput && submitBtn && closeBtn && successMsg && errorMsg) {
+    // Don't show if previously dismissed
+    if (localStorage.getItem('stickyBannerDismissed') === 'true') {
+      banner.remove();
+    } else {
+      // Slide up after 3 seconds
+      setTimeout(() => {
+        banner.classList.add('sticky-banner--visible');
+      }, 3000);
+
+      // Dismiss helper
+      function dismissBanner() {
+        localStorage.setItem('stickyBannerDismissed', 'true');
+        banner!.classList.remove('sticky-banner--visible');
+        setTimeout(() => banner!.remove(), 500);
+      }
+
+      // Close button
+      closeBtn.addEventListener('click', dismissBanner);
+
+      // Form submission
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = emailInput.value.trim();
+        if (!email) return;
+
+        // Loading state
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Subscribing…';
+        errorMsg.hidden = true;
+
+        // Extract UTM params
+        const params = new URLSearchParams(window.location.search);
+        const utm_source = params.get('utm_source') || undefined;
+        const utm_campaign = params.get('utm_campaign') || undefined;
+
+        try {
+          const result = await addSubscriber({
+            email,
+            source: 'sticky_banner',
+            utm_source,
+            utm_campaign,
+          });
+
+          if (result.success) {
+            form.hidden = true;
+            successMsg.hidden = false;
+            // Auto-dismiss after 3 seconds
+            setTimeout(dismissBanner, 3000);
+          } else {
+            errorMsg.hidden = false;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Subscribe';
+          }
+        } catch {
+          errorMsg.hidden = false;
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Subscribe';
+        }
+      });
+    }
+  }
+</script>
