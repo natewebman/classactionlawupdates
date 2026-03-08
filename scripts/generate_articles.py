@@ -26,11 +26,13 @@ Flow:
 import os
 import sys
 import json
+import re
 import uuid
 import hashlib
 import time
 import random
 import traceback
+from collections import defaultdict
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -40,7 +42,11 @@ from supabase import create_client
 
 # Add scripts/lib to path for shared utilities
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
-from dedup import is_duplicate, load_existing_articles, check_research_context, build_avoidance_data, extract_keywords, is_topic_covered, extract_company_from_case_name
+from dedup import (
+    is_duplicate, load_existing_articles, check_research_context,
+    build_avoidance_data, extract_keywords, is_topic_covered,
+    extract_company_from_case_name, is_case_duplicate,
+)
 
 
 # =============================================================================
@@ -289,9 +295,40 @@ def _build_avoid_section(avoidance_data: dict) -> str:
     )
 
 
-def research_topic(category: str, avoidance_data: dict = None) -> str:
-    """Use Perplexity to research real lawsuits in a category. Returns structured research."""
+def research_topic(category: str, avoidance_data: dict = None, topic_hint: str = None) -> str:
+    """Use Perplexity to research real lawsuits in a category. Returns structured research.
+
+    If topic_hint is provided, does focused research on that specific case instead of
+    broad category research. Used when a pre-vetted candidate is selected from the backlog.
+    """
     avoid_section = _build_avoid_section(avoidance_data)
+
+    if topic_hint:
+        # Focused research on a specific pre-vetted topic
+        user_content = (
+            f"Research this specific class action lawsuit in detail:\n\n"
+            f"{topic_hint}\n\n"
+            f"Provide comprehensive details: court name, parties involved, "
+            f"specific allegations, timeline, current status, and consumer impact.\n\n"
+            f"Include source URLs.\n"
+            f"Limit response to 300-500 words. Use bullet points."
+        )
+    else:
+        # Original broad research (fallback when no candidates)
+        user_content = (
+            f'Research real, current class action lawsuits or mass tort litigation related to "{category}".\n\n'
+            "Return structured information including:\n"
+            "- Specific lawsuit names and case numbers\n"
+            "- Defendants/companies involved\n"
+            "- Settlement amounts (if known)\n"
+            "- MDL numbers (if applicable)\n"
+            "- Current litigation status\n"
+            "- Recent developments (last 24 months)\n"
+            "- Source URLs\n\n"
+            "Focus on lawsuits that are active or recently settled.\n"
+            "Limit response to 300-500 words. Use bullet points."
+            + avoid_section
+        )
 
     messages = [
         {
@@ -301,23 +338,7 @@ def research_topic(category: str, avoidance_data: dict = None) -> str:
                 "about class action lawsuits. Return only verified facts with sources."
             ),
         },
-        {
-            "role": "user",
-            "content": (
-                f'Research real, current class action lawsuits or mass tort litigation related to "{category}".\n\n'
-                "Return structured information including:\n"
-                "- Specific lawsuit names and case numbers\n"
-                "- Defendants/companies involved\n"
-                "- Settlement amounts (if known)\n"
-                "- MDL numbers (if applicable)\n"
-                "- Current litigation status\n"
-                "- Recent developments (last 24 months)\n"
-                "- Source URLs\n\n"
-                "Focus on lawsuits that are active or recently settled.\n"
-                "Limit response to 300-500 words. Use bullet points."
-                + avoid_section
-            ),
-        },
+        {"role": "user", "content": user_content},
     ]
     return ask_perplexity(messages, max_tokens=1024)
 
@@ -386,6 +407,178 @@ def research_settlement(category: str, topic_url: str = "", topic_idea: str = ""
         {"role": "user", "content": user_content},
     ]
     return ask_perplexity(messages, max_tokens=1024)
+
+
+# =============================================================================
+# TOPIC DISCOVERY & CASE BACKLOG
+# =============================================================================
+
+def _parse_date(date_str: str) -> str | None:
+    """Try to parse a date string into ISO format (YYYY-MM-DD)."""
+    if not date_str or date_str.strip().lower() in ("n/a", "unknown", ""):
+        return None
+    date_str = date_str.strip()
+    for fmt in ("%Y-%m-%d", "%B %d, %Y", "%b %d, %Y", "%m/%d/%Y", "%d %B %Y"):
+        try:
+            return datetime.strptime(date_str, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_candidates(response: str) -> list[dict]:
+    """Parse Perplexity's pipe-separated response into candidate dicts."""
+    candidates = []
+    for line in response.strip().split('\n'):
+        line = line.strip()
+        if not line or line.startswith('#') or line.startswith('---'):
+            continue
+        # Strip leading numbers (1., 2., etc.)
+        line = re.sub(r'^\d+[\.\)]\s*', '', line)
+        parts = [p.strip() for p in line.split('|')]
+        if len(parts) < 2:
+            continue
+
+        candidate = {
+            "case_title": parts[0] if len(parts) > 0 else "",
+            "defendant": parts[1] if len(parts) > 1 else None,
+            "court": parts[2] if len(parts) > 2 else None,
+            "filing_date": _parse_date(parts[3]) if len(parts) > 3 else None,
+            "docket_number": parts[4] if len(parts) > 4 and parts[4].lower() not in ("n/a", "unknown", "") else None,
+            "source_url": parts[5] if len(parts) > 5 and parts[5].startswith("http") else None,
+            "research_summary": line,
+        }
+        if candidate["case_title"] and len(candidate["case_title"]) > 5:
+            candidates.append(candidate)
+    return candidates
+
+
+def discover_and_store_topics(
+    category: str,
+    content_type: str,
+    site_db,
+    site_id: str,
+) -> int:
+    """
+    Ask Perplexity for ~50 topics, dedup against known cases globally,
+    store new ones in case_candidates. Returns count of new candidates stored.
+    """
+    # Backlog size protection — per category/content_type cap
+    backlog = site_db.table("case_candidates") \
+        .select("id", count="exact") \
+        .eq("site_id", site_id) \
+        .eq("processed", False) \
+        .eq("category", category) \
+        .eq("content_type", content_type) \
+        .execute()
+    if backlog.count and backlog.count > 100:
+        print(
+            f"  ⏭️  Backlog already large for {content_type}/{category} "
+            f"({backlog.count} unprocessed) — skipping discovery"
+        )
+        return 0
+
+    # Build Perplexity prompt for broad discovery
+    if content_type == "settlement":
+        user_content = (
+            f"List 50 recent class action SETTLEMENTS in the '{category}' category "
+            f"where consumers can still file claims. For each, provide on a single line:\n"
+            f"Case Name | Defendant | Court | Filing/Settlement Date | Docket Number (if known) | Source URL\n\n"
+            f"Use the exact format above with pipe separators. "
+            f"Focus on settlements filed within the past 12 months."
+        )
+    else:
+        user_content = (
+            f"List 50 recent class action LAWSUITS in the '{category}' category. "
+            f"For each, provide on a single line:\n"
+            f"Case Name | Defendant | Court | Filing Date | Docket Number (if known) | Source URL\n\n"
+            f"Use the exact format above with pipe separators. "
+            f"Focus on lawsuits filed within the past 12 months with significant consumer impact."
+        )
+
+    messages = [
+        {"role": "system", "content": "You are a legal research assistant. List real cases with structured metadata."},
+        {"role": "user", "content": user_content},
+    ]
+    response = ask_perplexity(messages, max_tokens=2048)
+
+    # Parse response into candidate records
+    candidates = _parse_candidates(response)
+
+    # Global case-identity dedup pool (all categories)
+    global_candidates = site_db.table("case_candidates") \
+        .select("case_title, defendant, court, filing_date, docket_number, category") \
+        .eq("site_id", site_id) \
+        .execute().data or []
+
+    global_articles = site_db.table("articles") \
+        .select("title, case_name, category") \
+        .eq("site_id", site_id) \
+        .neq("content_stage", "failed") \
+        .execute().data or []
+
+    # Build global hard dedup pool across all categories
+    hard_dedup_pool = []
+    for a in global_articles:
+        hard_dedup_pool.append({
+            "case_title": a.get("case_name") or a.get("title", ""),
+            "defendant": None,
+            "court": None,
+            "filing_date": None,
+            "docket_number": None,
+        })
+    hard_dedup_pool.extend(global_candidates)
+
+    # Dedup each candidate against GLOBAL pool
+    new_count = 0
+    for candidate in candidates:
+        if is_case_duplicate(candidate, hard_dedup_pool):
+            print(f"    ↳ Skipping (global case duplicate): {candidate['case_title'][:80]}")
+            continue
+
+        # Insert into case_candidates
+        try:
+            site_db.table("case_candidates").insert({
+                "site_id": site_id,
+                "case_title": candidate["case_title"],
+                "defendant": candidate.get("defendant"),
+                "court": candidate.get("court"),
+                "filing_date": candidate.get("filing_date"),
+                "docket_number": candidate.get("docket_number"),
+                "source_url": candidate.get("source_url"),
+                "category": category,
+                "content_type": content_type,
+                "research_summary": candidate.get("research_summary"),
+            }).execute()
+            new_count += 1
+            # Add to global dedup pool for subsequent candidates in this batch
+            hard_dedup_pool.append(candidate)
+        except Exception as e:
+            # DB uniqueness constraint may catch duplicates the app-level dedup missed
+            print(f"    ↳ Insert failed (likely DB uniqueness constraint): {e}")
+
+    print(f"  📋 Discovered {len(candidates)} cases, stored {new_count} new candidates")
+    return new_count
+
+
+def _handle_candidate_failure(site_db, candidate_id: str, candidate: dict):
+    """Handle a failed candidate: retry up to 3 times, then permanently fail."""
+    current_retry = candidate.get("retry_count", 0)
+    try:
+        if current_retry < 3:
+            site_db.table("case_candidates") \
+                .update({"status": "discovered", "retry_count": current_retry + 1}) \
+                .eq("id", candidate_id) \
+                .execute()
+            print(f"  🔄 Candidate retry {current_retry + 1}/3 — returning to queue")
+        else:
+            site_db.table("case_candidates") \
+                .update({"status": "failed"}) \
+                .eq("id", candidate_id) \
+                .execute()
+            print(f"  ❌ Candidate failed after 3 retries — permanently marked failed")
+    except Exception as e:
+        print(f"  ⚠️ Failed to update candidate {candidate_id} status: {e}")
 
 
 # =============================================================================
@@ -634,17 +827,39 @@ def main():
 
     print(f"Content plan: {list(zip(content_types, categories))}")
 
-    # Deduplication: fetch existing articles and build structured avoidance data
+    # Deduplication: fetch existing articles globally for dedup checks
     existing_articles = load_existing_articles(site_db)
     avoidance_data = build_avoidance_data(existing_articles)
     print(f"Dedup: {len(avoidance_data['titles'])} titles/cases, {len(avoidance_data['companies'])} companies loaded")
 
-    def _category_avoidance(base_avoidance: dict, existing: list[dict], category: str) -> dict:
-        """Build category-prioritized avoidance from the shared base data."""
-        cat_data = build_avoidance_data(existing, category=category)
-        # Merge any intra-batch companies from the shared base
-        cat_data["companies"] = cat_data["companies"] | base_avoidance.get("companies", set())
-        return cat_data
+    def _category_avoidance(existing: list[dict], category: str) -> dict:
+        """Build category-scoped avoidance for discovery prompts (last 50 in category)."""
+        # Filter to same-category articles for prompt relevance
+        cat_articles = [a for a in existing if a.get("category") == category][:50]
+        return build_avoidance_data(cat_articles, category=category)
+
+    # --- DISCOVERY PHASE ---
+    # Discover new case candidates and store in backlog (per category/content_type)
+    if not TOPIC_URL and not TOPIC_IDEA and site_db_site_id:
+        topic_groups = defaultdict(int)
+        for idx in range(ARTICLES_COUNT):
+            ct = content_types[idx]
+            cat = categories[idx]
+            topic_groups[(ct, cat)] += 1
+
+        total_discovered = 0
+        for (ct, cat), needed in topic_groups.items():
+            print(f"\n🔍 Discovering topics for {ct}/{cat} (need {needed})...")
+            try:
+                discovered = discover_and_store_topics(cat, ct, site_db, site_db_site_id)
+                total_discovered += discovered
+            except Exception as e:
+                print(f"  ⚠️ Discovery failed for {ct}/{cat}: {e}")
+                traceback.print_exc()
+
+        print(f"\n📊 Discovery complete: {total_discovered} new candidates stored")
+    else:
+        print("\n⏭️ Skipping discovery (guided topic or no site_id)")
 
     total_input_tokens = 0
     total_output_tokens = 0
@@ -680,24 +895,64 @@ def main():
             # retry the entire research→generate cycle with stronger avoidance
             max_article_attempts = 3
             article_written = False
+            candidate_id = None  # Track if we're using a backlog candidate
 
             for attempt in range(max_article_attempts):
                 if attempt > 0:
                     print(f"  ↻ Retrying article generation (attempt {attempt + 1}/{max_article_attempts})...")
 
-                # Step 1: Research via Perplexity with multi-retry dedup
-                # Build category-scoped avoidance, merging intra-batch companies
-                cat_avoidance = _category_avoidance(avoidance_data, existing_articles, category)
+                # Build category-scoped avoidance for prompts (last 50 in same category)
+                cat_avoidance = _category_avoidance(existing_articles, category)
 
+                # Step 1: Try to select a pre-vetted candidate from the backlog
+                topic_hint = None
+                candidate_id = None
+                candidate = None
+
+                if not TOPIC_URL and not TOPIC_IDEA and site_db_site_id:
+                    result = site_db.table("case_candidates") \
+                        .select("*") \
+                        .eq("site_id", site_db_site_id) \
+                        .eq("processed", False) \
+                        .eq("status", "discovered") \
+                        .eq("category", category) \
+                        .eq("content_type", article_content_type) \
+                        .order("discovered_at", desc=False) \
+                        .limit(1) \
+                        .execute()
+
+                    if result.data:
+                        candidate = result.data[0]
+                        candidate_id = candidate["id"]
+                        # Safely claim candidate — verify it was actually claimed
+                        claim_result = site_db.table("case_candidates") \
+                            .update({"status": "processing"}) \
+                            .eq("id", candidate_id) \
+                            .eq("status", "discovered") \
+                            .execute()
+                        if claim_result.data:
+                            topic_hint = candidate["case_title"]
+                            print(f"  📌 Using backlog candidate: {topic_hint[:80]}...")
+                        else:
+                            print(f"  ⚠️ Candidate {candidate_id} could not be claimed — falling back to direct research")
+                            candidate_id = None
+                    else:
+                        print(f"  ⚠️ No backlog candidates for {article_content_type}/{category} — using direct research")
+
+                # Step 2: Research via Perplexity
                 max_research_retries = 2
                 research_context = None
                 research_is_dup = False
 
                 for retry in range(max_research_retries + 1):
                     if article_content_type == "settlement":
-                        research_context = research_settlement(category, TOPIC_URL, TOPIC_IDEA, cat_avoidance)
+                        research_context = research_settlement(
+                            category, TOPIC_URL,
+                            TOPIC_IDEA or topic_hint,
+                            cat_avoidance
+                        )
                     else:
-                        research_context = research_topic(category, cat_avoidance)
+                        research_context = research_topic(category, cat_avoidance, topic_hint=topic_hint)
 
                     attempt_label = f"(research {retry + 1}/{max_research_retries + 1}) " if retry > 0 else ""
                     print(f"  ✓ Research {attempt_label}complete ({len(research_context)} chars)")
@@ -720,9 +975,12 @@ def main():
                         print(f"  ✗ Still overlaps after {max_research_retries} retries: {matched_title[:70] if matched_title else 'unknown'}")
 
                 if research_is_dup:
+                    # Mark candidate as failed if we were using backlog
+                    if candidate_id:
+                        _handle_candidate_failure(site_db, candidate_id, candidate)
                     break  # All research retries exhausted — give up on this article slot
 
-                # Step 1b: Pre-generation topic coverage check
+                # Step 2b: Pre-generation topic coverage check
                 # Catches cases where check_research_context() misses overlap because
                 # the research doesn't use exact "X v. Y" formatting
                 topic_covered, topic_match = is_topic_covered(research_context, cat_avoidance)
@@ -731,6 +989,9 @@ def main():
                     if topic_match:
                         cat_avoidance["titles"].append(topic_match)
                         cat_avoidance["keywords"].append(extract_keywords(topic_match))
+                    if candidate_id:
+                        _handle_candidate_failure(site_db, candidate_id, candidate)
+                        candidate_id = None  # Prevent double-handling in post-loop block
                     continue  # Retry outer loop with stronger avoidance
 
                 # Step 2: Build prompt with research context injected
@@ -764,15 +1025,18 @@ def main():
                 print(f"  Source: {source_url[:60]}..." if len(str(source_url)) > 60 else f"  Source: {source_url}")
                 print(f"  Tokens: {input_tokens} in / {output_tokens} out")
 
-                # Post-generation duplicate check — title/case_name Jaccard + company name match
-                if is_duplicate(title, case_name, existing_articles, companies=avoidance_data.get("companies")):
-                    print(f"  ⚠ DUPLICATE detected (title/company match)")
+                # Post-generation duplicate check — title/case_name Jaccard similarity
+                if is_duplicate(title, case_name, existing_articles):
+                    print(f"  ⚠ DUPLICATE detected (title Jaccard match)")
                     # Strengthen avoidance and retry
                     cat_avoidance["titles"].append(title)
                     cat_avoidance["keywords"].append(extract_keywords(title))
                     if case_name:
                         cat_avoidance["titles"].append(case_name)
                         cat_avoidance["keywords"].append(extract_keywords(case_name))
+                    if candidate_id:
+                        _handle_candidate_failure(site_db, candidate_id, candidate)
+                        candidate_id = None  # Prevent double-handling in post-loop block
                     continue  # Retry outer loop
 
                 # Post-generation content body check — catches cases where the title is
@@ -789,12 +1053,19 @@ def main():
                         if body_match:
                             cat_avoidance["titles"].append(body_match)
                             cat_avoidance["keywords"].append(extract_keywords(body_match))
+                        if candidate_id:
+                            _handle_candidate_failure(site_db, candidate_id, candidate)
+                            candidate_id = None  # Prevent double-handling in post-loop block
                         continue  # Retry outer loop
 
                 article_written = True
                 break  # Post-gen checks passed — article is clean
 
             if not article_written:
+                # Handle candidate failure if we were using a backlog candidate
+                # (research_is_dup case already handled above via break)
+                if candidate_id and not research_is_dup:
+                    _handle_candidate_failure(site_db, candidate_id, candidate)
                 if not research_is_dup:
                     print(f"  ✗ All {max_article_attempts} generation attempts produced duplicates — skipping")
                 else:
@@ -806,6 +1077,22 @@ def main():
             print(f"  ✓ Site DB: written")
             articles_generated += 1
             articles_published += 1
+
+            # Mark backlog candidate as processed and link article
+            if candidate_id:
+                try:
+                    site_db.table("case_candidates") \
+                        .update({
+                            "processed": True,
+                            "status": "processed",
+                            "processed_at": datetime.now(timezone.utc).isoformat(),
+                            "article_id": article_id,
+                        }) \
+                        .eq("id", candidate_id) \
+                        .execute()
+                    print(f"  ✓ Candidate marked processed")
+                except Exception as e:
+                    print(f"  ⚠️ Failed to mark candidate processed: {e}")
 
             # Add to dedup lists so subsequent articles in this batch don't duplicate
             existing_articles.append({"title": title, "case_name": case_name, "category": category})

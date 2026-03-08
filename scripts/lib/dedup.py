@@ -8,6 +8,8 @@ to prevent publishing multiple articles about the same lawsuit.
 from __future__ import annotations
 
 import re
+from datetime import datetime
+from difflib import SequenceMatcher
 from typing import Optional
 
 # Common words to ignore when comparing titles
@@ -87,20 +89,19 @@ def is_duplicate(
     new_title: str,
     new_case_name: Optional[str],
     existing_entries: list,
-    companies: Optional[set[str]] = None,
 ) -> bool:
     """
     Check if a new article is a duplicate of any existing article.
-    Uses pairwise keyword comparison across titles and case names,
-    plus optional company-name substring matching.
+    Uses pairwise keyword comparison across titles and case names.
+
+    Does NOT block by company name alone — multiple articles about the
+    same company (different cases) are allowed. Use is_case_duplicate()
+    for case-identity level dedup.
 
     Args:
         new_title: Title of the new article
         new_case_name: Case name of the new article (can be None)
         existing_entries: List of dicts with 'title' and optional 'case_name' keys
-        companies: Optional set of known defendant company names from
-                   build_avoidance_data(). If any company appears as a substring
-                   in new_title or new_case_name (case-insensitive), returns True.
 
     Returns:
         True if the article appears to be a duplicate
@@ -112,20 +113,6 @@ def is_duplicate(
 
     if not new_title_kw and not new_case_kw:
         return False
-
-    # Company-name normalized check — catches rewording of the same defendant
-    if companies:
-        title_lower = new_title.lower()
-        case_lower = new_case_name.lower() if new_case_name else ""
-        combined = title_lower + " " + case_lower
-        for company in companies:
-            normalized = _normalize_company(company).lower()
-            if len(normalized) < 3:
-                continue
-            # Word-boundary match: each token of the company name must appear
-            tokens = normalized.split()
-            if all(t in combined for t in tokens):
-                return True
 
     for existing in existing_entries:
         ex_title_kw = _extract_keywords(existing.get("title", ""))
@@ -371,3 +358,58 @@ def is_topic_covered(topic_text: str, avoidance_data: dict, threshold: float = 0
                 return True, matched
 
     return False, None
+
+
+def is_case_duplicate(candidate: dict, existing_pool: list[dict]) -> bool:
+    """
+    Check if a case candidate is a duplicate based on lawsuit identity.
+    Does NOT block by company name alone — only blocks identical cases.
+
+    Duplicate if ANY of:
+      A) docket_number matches
+      B) case_title similarity > 75% (SequenceMatcher)
+      C) same defendant AND same court AND filing_date within ±3 days
+
+    Args:
+        candidate: Dict with case_title, docket_number, defendant, court, filing_date
+        existing_pool: List of dicts with the same keys (from articles + case_candidates)
+
+    Returns:
+        True if the candidate is a duplicate of an existing case
+    """
+    new_title = candidate.get("case_title", "").strip()
+    new_docket = candidate.get("docket_number", "")
+    new_defendant = _normalize_company(candidate.get("defendant", "") or "").lower()
+    new_court = (candidate.get("court") or "").strip().lower()
+    new_date = candidate.get("filing_date")  # ISO string or None
+
+    for existing in existing_pool:
+        ex_title = existing.get("case_title", "").strip()
+        ex_docket = existing.get("docket_number", "")
+        ex_defendant = _normalize_company(existing.get("defendant", "") or "").lower()
+        ex_court = (existing.get("court") or "").strip().lower()
+        ex_date = existing.get("filing_date")
+
+        # Criterion A: Docket number match
+        if new_docket and ex_docket and new_docket.strip() == ex_docket.strip():
+            return True
+
+        # Criterion B: Case title similarity > 75%
+        if new_title and ex_title:
+            ratio = SequenceMatcher(None, new_title.lower(), ex_title.lower()).ratio()
+            if ratio > 0.75:
+                return True
+
+        # Criterion C: Same defendant + same court + filing dates within ±3 days
+        if (new_defendant and ex_defendant and new_court and ex_court
+                and new_date and ex_date):
+            if new_defendant == ex_defendant and new_court == ex_court:
+                try:
+                    d1 = datetime.strptime(str(new_date)[:10], "%Y-%m-%d")
+                    d2 = datetime.strptime(str(ex_date)[:10], "%Y-%m-%d")
+                    if abs((d1 - d2).days) <= 3:
+                        return True
+                except (ValueError, TypeError):
+                    pass
+
+    return False
