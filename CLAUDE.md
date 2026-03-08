@@ -51,6 +51,8 @@ Articles that fail fact-checking are regenerated (up to 2 retries) before being 
 | `/news/[slug]` | SSR | News article detail |
 | `/category/[slug]` | Static | Category hub — intro text, largest settlements table, article grid, cross-links |
 | `/open-class-action-settlements` | SSR | Open settlements with active claims, sorted by nearest deadline |
+| `/claim-deadlines-ending-soon` | SSR | Settlements with claim deadlines within 14 days |
+| `/class-action-settlements-database` | SSR | Sortable/filterable table of all settlements |
 | `/brand/[slug]` | SSR | All settlements/news for a specific company |
 | `/state/[slug]` | SSR | Settlements by US state location |
 | `/about` | Static | About page with Organization schema |
@@ -66,6 +68,7 @@ Supabase client and data fetching. Key query functions:
 - `getArticles()` — published articles, filterable by category/newsType
 - `getArticleBySlug()` — single article lookup
 - `getOpenSettlements()` — settlements with active status or future claim deadlines
+- `getExpiringSettlements()` — settlements with claim deadlines within the next 14 days (excludes closed)
 - `getAllSettlements()` — all published settlements (for brand/state extraction)
 - `addSubscriber()` — upsert subscriber (re-subscribing resets status to active)
 - `unsubscribeEmail()` — mark subscriber as unsubscribed with timestamp
@@ -122,9 +125,10 @@ Settlement detail pages link to: category hub, brand page, state page, open sett
 
 ## Content Pipeline
 
-Runs via GitHub Actions. Single unified workflow:
+Runs via GitHub Actions. Two workflows:
 
 - **Generate Articles** (`generate-articles.yml`) — generates news + settlement articles, daily at 15:00 UTC (9 AM Central) + manual
+- **Update Case Status** (`update-case-status.yml`) — weekly on Sundays at 2 PM UTC + manual. Checks all non-closed published articles against Perplexity for source-supported status changes. Updates only settlement metadata fields (`case_status`, `settlement_amount`, `claim_deadline`, `claim_url`, `settlement_website`, `claims_administrator`, `potential_reward`, `location`). Never touches `title`, `slug`, `content`, or `content_stage`. Uses batch size 5 by default, with single-case fallback if batch parsing fails. Supports dry-run mode.
 
 The `CONTENT_TYPE` input controls what gets generated: `mixed` (default, roughly half news/half settlements), `news`, or `settlement`. Categories are auto-balanced to keep hub pages even. Default output is 1 article per run.
 

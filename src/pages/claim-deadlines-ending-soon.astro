@@ -3,20 +3,19 @@ export const prerender = false;
 
 import BaseLayout from '../layouts/BaseLayout.astro';
 import CategoryCrossLinks from '../components/CategoryCrossLinks.astro';
-import { getOpenSettlements } from '../lib/supabase';
+import { getExpiringSettlements } from '../lib/supabase';
 import { siteConfig } from '../site.config';
 import { getItemList } from '../lib/structured-data';
 
-const settlements = await getOpenSettlements({ limit: 100 });
+const settlements = await getExpiringSettlements({ limit: 50 });
 
-const pageUrl = `https://${siteConfig.domain}/open-class-action-settlements`;
-const pageTitle = 'Open Class Action Settlements You Can Claim Now';
-const pageDescription = 'Browse currently open class action settlements with active claim deadlines. Find settlements you may qualify for and file your claim today.';
+const pageTitle = 'Class Action Settlements Ending Soon';
+const pageDescription = 'Class action settlements with claim deadlines ending in the next 14 days. File your claim before time runs out.';
 
 const itemListSchema = getItemList({
   name: pageTitle,
   description: pageDescription,
-  items: settlements.slice(0, 50).map((a, i) => ({
+  items: settlements.map((a, i) => ({
     position: i + 1,
     name: a.title,
     url: `https://${siteConfig.domain}/settlements/${a.slug}`,
@@ -26,7 +25,7 @@ const itemListSchema = getItemList({
 const breadcrumbs = [
   { name: 'Home', url: '/' },
   { name: 'Settlements', url: '/settlements' },
-  { name: 'Open Settlements', url: '/open-class-action-settlements' },
+  { name: 'Deadlines Ending Soon', url: '/claim-deadlines-ending-soon' },
 ];
 
 // Helper: format deadline for display
@@ -60,9 +59,9 @@ function formatDeadline(deadline: string | null): { text: string; urgent: boolea
         </a>
         <h1 class="text-4xl lg:text-5xl font-heading font-black text-gray-900">{pageTitle}</h1>
         <p class="text-gray-500 mt-3 text-lg max-w-3xl">
-          These class action settlements are currently accepting claims. Check each settlement for eligibility requirements and file before the deadline passes.
+          These settlements have claim deadlines expiring within the next 14 days. Act now to file your claim before time runs out.
         </p>
-        <p class="text-sm text-gray-400 mt-2">{settlements.length} open {settlements.length === 1 ? 'settlement' : 'settlements'} found.</p>
+        <p class="text-sm text-gray-400 mt-2">{settlements.length} {settlements.length === 1 ? 'settlement' : 'settlements'} with upcoming deadlines.</p>
       </div>
 
       <!-- Settlement List -->
@@ -122,40 +121,25 @@ function formatDeadline(deadline: string | null): { text: string; urgent: boolea
         </div>
       ) : (
         <div class="text-center py-16 bg-gray-50 rounded-2xl border border-gray-100">
-          <p class="text-gray-500 font-semibold text-lg">No open settlements at this time.</p>
-          <p class="text-gray-400 mt-1">Check back soon — new settlements are added regularly.</p>
+          <p class="text-gray-500 font-semibold text-lg">No settlements with deadlines ending soon.</p>
+          <p class="text-gray-400 mt-1">Check back regularly — new deadlines appear as settlements progress.</p>
         </div>
       )}
 
-      <!-- CTA -->
-      <div class="mt-12 bg-navy-600 rounded-xl p-6 sm:p-8 text-center">
-        <h2 class="text-xl sm:text-2xl font-heading font-bold text-white mb-2">Never Miss a Settlement</h2>
-        <p class="text-white/80 mb-4">Get notified when new settlements open that you may qualify for.</p>
+      <!-- CTA: Browse all open settlements -->
+      <div class="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
         <a
-          href="/signup"
-          class="inline-flex items-center gap-2 px-6 py-3 bg-white text-navy-700 font-semibold rounded-lg hover:bg-gray-100 transition-colors"
+          href="/open-class-action-settlements"
+          class="inline-flex items-center gap-2 px-6 py-3 bg-navy-600 text-white font-semibold rounded-lg hover:bg-navy-700 transition-colors"
         >
-          Sign Up for Free Alerts
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-          </svg>
-        </a>
-      </div>
-
-      <!-- Secondary links -->
-      <div class="mt-8 flex flex-wrap items-center justify-center gap-4">
-        <a
-          href="/claim-deadlines-ending-soon"
-          class="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
-        >
-          Deadlines Ending Soon
+          Browse All Open Settlements
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
           </svg>
         </a>
         <a
           href="/class-action-settlements-database"
-          class="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
+          class="inline-flex items-center gap-2 px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
         >
           Settlement Database
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

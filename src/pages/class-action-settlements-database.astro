@@ -1,0 +1,342 @@
+---
+export const prerender = false;
+
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CategoryCrossLinks from '../components/CategoryCrossLinks.astro';
+import { getAllSettlements } from '../lib/supabase';
+import { siteConfig } from '../site.config';
+import { getItemList, getCollectionPage } from '../lib/structured-data';
+import { parseSettlementAmount } from '../lib/settlement-amount';
+import { extractBrand, extractState, toSlug, US_STATES } from '../lib/brand-state-extraction';
+
+const allSettlements = await getAllSettlements({ limit: 500 });
+
+// Sort: non-closed first, then by published_at desc
+const settlements = [...allSettlements].sort((a, b) => {
+  const aClosed = a.case_status === 'closed' ? 1 : 0;
+  const bClosed = b.case_status === 'closed' ? 1 : 0;
+  if (aClosed !== bClosed) return aClosed - bClosed;
+  return new Date(b.published_at ?? b.created_at).getTime() - new Date(a.published_at ?? a.created_at).getTime();
+});
+
+const pageTitle = 'Class Action Settlement Database (Updated Weekly)';
+const pageDescription = 'Browse a searchable database of current and past class action settlements. Filter by status, state, and category. Find settlement amounts, claim deadlines, and eligibility.';
+const pageUrl = `https://${siteConfig.domain}/class-action-settlements-database`;
+
+const collectionPageSchema = getCollectionPage({
+  name: pageTitle,
+  description: pageDescription,
+  url: pageUrl,
+  numberOfItems: settlements.length,
+});
+
+const itemListSchema = getItemList({
+  name: pageTitle,
+  description: pageDescription,
+  items: settlements.slice(0, 50).map((a, i) => ({
+    position: i + 1,
+    name: a.title,
+    url: `https://${siteConfig.domain}/settlements/${a.slug}`,
+  })),
+});
+
+const breadcrumbs = [
+  { name: 'Home', url: '/' },
+  { name: 'Settlements', url: '/settlements' },
+  { name: 'Settlement Database', url: '/class-action-settlements-database' },
+];
+
+// Helper: format deadline for display
+function formatDeadline(deadline: string | null): { text: string; urgent: boolean; passed: boolean } | null {
+  if (!deadline) return null;
+  const d = new Date(deadline + 'T00:00:00');
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const daysUntil = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const display = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  if (daysUntil < 0) return { text: `Expired ${display}`, urgent: false, passed: true };
+  if (daysUntil <= 14) return { text: `${display} (${daysUntil}d)`, urgent: true, passed: false };
+  if (daysUntil <= 30) return { text: `${display} (${daysUntil}d)`, urgent: true, passed: false };
+  return { text: display, urgent: false, passed: false };
+}
+
+// Status color map
+function statusColor(status: string | null): string {
+  switch (status?.toLowerCase()) {
+    case 'paying': return 'bg-green-100 text-green-800';
+    case 'approved': return 'bg-blue-100 text-blue-800';
+    case 'settled': return 'bg-indigo-100 text-indigo-800';
+    case 'pending': return 'bg-yellow-100 text-yellow-800';
+    case 'filed': return 'bg-gray-100 text-gray-700';
+    case 'closed': return 'bg-red-100 text-red-700';
+    default: return 'bg-gray-100 text-gray-600';
+  }
+}
+
+// Unique statuses and categories for filter dropdowns
+const allStatuses = [...new Set(settlements.map((a) => a.case_status).filter(Boolean))] as string[];
+const categories = siteConfig.settlementCategories.filter((c) => c.slug !== 'all');
+---
+
+<BaseLayout title={pageTitle} description={pageDescription} breadcrumbs={breadcrumbs}>
+  <script type="application/ld+json" set:html={JSON.stringify(collectionPageSchema)} />
+  <script type="application/ld+json" set:html={JSON.stringify(itemListSchema)} />
+
+  <section class="bg-white py-12 lg:py-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="mb-8">
+        <a href="/settlements" class="inline-flex items-center gap-1 text-navy-600 text-sm font-medium hover:text-navy-800 mb-4">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
+          </svg>
+          All Settlements
+        </a>
+        <h1 class="text-4xl lg:text-5xl font-heading font-black text-gray-900">Settlement Database</h1>
+        <p class="text-gray-500 mt-3 text-lg max-w-3xl">
+          Browse {settlements.length} class action settlements. Sort by amount, deadline, or status. Filter by category to find cases that affect you.
+        </p>
+      </div>
+
+      <!-- Filters -->
+      <div class="flex flex-wrap gap-3 mb-6" id="db-filters">
+        <select id="filter-status" class="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white focus:ring-2 focus:ring-navy-500 focus:border-navy-500">
+          <option value="all">All Statuses</option>
+          {allStatuses.map((s) => (
+            <option value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+          ))}
+        </select>
+        <select id="filter-category" class="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white focus:ring-2 focus:ring-navy-500 focus:border-navy-500">
+          <option value="all">All Categories</option>
+          {categories.map((c) => (
+            <option value={c.slug}>{c.name}</option>
+          ))}
+        </select>
+        <span id="db-count" class="self-center text-sm text-gray-400"></span>
+      </div>
+
+      <!-- Table -->
+      <div class="overflow-x-auto rounded-xl border border-gray-200">
+        <table class="w-full text-left text-sm" id="db-table">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-200">
+              <th class="px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Brand</th>
+              <th class="px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Case Name</th>
+              <th class="px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide cursor-pointer hover:text-navy-600 select-none" data-sort="amount">
+                Amount
+                <svg class="w-3 h-3 inline-block ml-0.5 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+              </th>
+              <th class="px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide hidden lg:table-cell">Reward</th>
+              <th class="px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide cursor-pointer hover:text-navy-600 select-none" data-sort="deadline">
+                Deadline
+                <svg class="w-3 h-3 inline-block ml-0.5 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+              </th>
+              <th class="px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide cursor-pointer hover:text-navy-600 select-none" data-sort="status">
+                Status
+                <svg class="w-3 h-3 inline-block ml-0.5 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+              </th>
+              <th class="px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide hidden md:table-cell">State</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100" id="db-body">
+            {settlements.map((article, idx) => {
+              const brand = extractBrand(article);
+              const brandSlug = brand ? toSlug(brand) : null;
+              const stateSlug = extractState(article);
+              const stateName = stateSlug ? US_STATES[stateSlug] : null;
+              const deadline = formatDeadline(article.claim_deadline);
+              const numericAmount = parseSettlementAmount(article.settlement_amount);
+              const isClosed = article.case_status === 'closed';
+
+              return (
+                <tr
+                  class:list={[
+                    'hover:bg-gray-50 transition-colors db-row',
+                    isClosed ? 'opacity-50' : '',
+                    idx >= 50 ? 'hidden db-overflow' : '',
+                  ]}
+                  data-status={article.case_status ?? ''}
+                  data-category={article.category ?? ''}
+                  data-amount={numericAmount ?? 0}
+                  data-deadline={article.claim_deadline ?? ''}
+                >
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    {brand && brandSlug ? (
+                      <a href={`/brand/${brandSlug}`} class="text-navy-600 hover:text-navy-800 font-medium">{brand}</a>
+                    ) : (
+                      <span class="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td class="px-4 py-3 max-w-xs">
+                    <a href={`/settlements/${article.slug}`} class="text-gray-900 hover:text-navy-600 font-medium line-clamp-1">
+                      {article.case_name || article.title}
+                    </a>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap font-semibold text-gray-700">
+                    {article.settlement_amount || '—'}
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-gray-600 hidden lg:table-cell">
+                    {article.potential_reward || '—'}
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    {deadline ? (
+                      <span class:list={[
+                        'text-sm',
+                        deadline.passed ? 'text-gray-400 line-through' : deadline.urgent ? 'text-red-600 font-semibold' : 'text-gray-700',
+                      ]}>
+                        {deadline.text}
+                      </span>
+                    ) : (
+                      <span class="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    {article.case_status ? (
+                      <span class:list={['px-2 py-0.5 rounded-full text-xs font-medium', statusColor(article.case_status)]}>
+                        {article.case_status.charAt(0).toUpperCase() + article.case_status.slice(1)}
+                      </span>
+                    ) : (
+                      <span class="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap hidden md:table-cell">
+                    {stateName && stateSlug ? (
+                      <a href={`/state/${stateSlug}`} class="text-navy-600 hover:text-navy-800 text-sm">{stateName}</a>
+                    ) : (
+                      <span class="text-gray-400">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Show All button -->
+      {settlements.length > 50 && (
+        <div class="mt-4 text-center" id="show-all-wrap">
+          <button
+            id="show-all-btn"
+            class="px-6 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
+          >
+            Show All ({settlements.length} settlements)
+          </button>
+        </div>
+      )}
+
+      <!-- Links -->
+      <div class="mt-12 flex flex-wrap items-center justify-center gap-4">
+        <a
+          href="/open-class-action-settlements"
+          class="inline-flex items-center gap-2 px-5 py-2.5 bg-navy-600 text-white font-semibold rounded-lg hover:bg-navy-700 transition-colors text-sm"
+        >
+          Open Settlements
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+          </svg>
+        </a>
+        <a
+          href="/claim-deadlines-ending-soon"
+          class="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
+        >
+          Deadlines Ending Soon
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+          </svg>
+        </a>
+      </div>
+
+      <CategoryCrossLinks />
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  // --- Filters ---
+  const statusFilter = document.getElementById('filter-status') as HTMLSelectElement;
+  const categoryFilter = document.getElementById('filter-category') as HTMLSelectElement;
+  const rows = document.querySelectorAll<HTMLTableRowElement>('#db-body .db-row');
+  const countEl = document.getElementById('db-count');
+
+  function applyFilters() {
+    const status = statusFilter.value;
+    const category = categoryFilter.value;
+    let visible = 0;
+    rows.forEach((row) => {
+      const rowStatus = row.dataset.status ?? '';
+      const rowCategory = row.dataset.category ?? '';
+      const statusMatch = status === 'all' || rowStatus === status;
+      const categoryMatch = category === 'all' || rowCategory === category;
+      if (statusMatch && categoryMatch) {
+        row.style.display = '';
+        visible++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+    if (countEl) countEl.textContent = `${visible} results`;
+  }
+
+  statusFilter?.addEventListener('change', applyFilters);
+  categoryFilter?.addEventListener('change', applyFilters);
+
+  // --- Show All ---
+  const showAllBtn = document.getElementById('show-all-btn');
+  const showAllWrap = document.getElementById('show-all-wrap');
+  showAllBtn?.addEventListener('click', () => {
+    document.querySelectorAll('.db-overflow').forEach((el) => {
+      (el as HTMLElement).classList.remove('hidden', 'db-overflow');
+    });
+    if (showAllWrap) showAllWrap.style.display = 'none';
+    applyFilters();
+  });
+
+  // --- Sorting ---
+  const headers = document.querySelectorAll<HTMLElement>('#db-table th[data-sort]');
+  const tbody = document.getElementById('db-body');
+  let currentSort = '';
+  let sortAsc = true;
+
+  headers.forEach((th) => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      if (!key || !tbody) return;
+
+      if (currentSort === key) {
+        sortAsc = !sortAsc;
+      } else {
+        currentSort = key;
+        sortAsc = true;
+      }
+
+      const rowArray = Array.from(rows);
+      rowArray.sort((a, b) => {
+        let valA: string | number;
+        let valB: string | number;
+        if (key === 'amount') {
+          valA = parseFloat(a.dataset.amount ?? '0');
+          valB = parseFloat(b.dataset.amount ?? '0');
+        } else if (key === 'deadline') {
+          valA = a.dataset.deadline ?? '';
+          valB = b.dataset.deadline ?? '';
+          // Push empty deadlines to end
+          if (!valA && !valB) return 0;
+          if (!valA) return 1;
+          if (!valB) return -1;
+        } else {
+          valA = (a.dataset[key] ?? '').toLowerCase();
+          valB = (b.dataset[key] ?? '').toLowerCase();
+        }
+        if (valA < valB) return sortAsc ? -1 : 1;
+        if (valA > valB) return sortAsc ? 1 : -1;
+        return 0;
+      });
+      rowArray.forEach((r) => tbody.appendChild(r));
+    });
+  });
+
+  // Init count
+  applyFilters();
+</script>

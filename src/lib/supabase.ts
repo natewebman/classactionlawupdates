@@ -177,6 +177,34 @@ export async function getAllSettlements(opts?: { limit?: number }): Promise<Arti
   return data ?? [];
 }
 
+/**
+ * Fetch published settlements with claim deadlines expiring within the next 14 days.
+ * Excludes closed cases. Sorted by nearest deadline first.
+ */
+export async function getExpiringSettlements(opts?: { limit?: number }): Promise<Article[]> {
+  const siteId = await getSiteId();
+  const today = new Date().toISOString().split('T')[0];
+  const in14Days = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('articles')
+    .select('*')
+    .eq('site_id', siteId)
+    .eq('content_stage', 'published')
+    .not('claim_deadline', 'is', null)
+    .gte('claim_deadline', today)
+    .lte('claim_deadline', in14Days)
+    .or('case_status.neq.closed,case_status.is.null')
+    .order('claim_deadline', { ascending: true })
+    .limit(opts?.limit ?? 50);
+
+  if (error) {
+    console.error('Error fetching expiring settlements:', error);
+    return [];
+  }
+  return data ?? [];
+}
+
 // ---------- Subscribers ----------
 
 export async function addSubscriber(fields: {
