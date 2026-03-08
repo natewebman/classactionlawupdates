@@ -26,6 +26,7 @@ All data is scoped by `site_id`. The `sites` table maps `site_key` → `site_id`
 ### Supabase tables used
 - `sites` — site registry (site_key, id, deploy_hook_url)
 - `articles` — all content (news + settlements), filtered by `content_stage` and `news_type`
+- `case_candidates` — discovery backlog of potential cases to cover (status: discovered → processing → processed/failed/duplicate)
 - `subscribers` — email signups with unsubscribe support (upsert on site_id + email, status: active/unsubscribed)
 - `submissions` — form submissions (attorney portal, etc.)
 
@@ -123,20 +124,25 @@ Settlement detail pages link to: category hub, brand page, state page, open sett
 
 Runs via GitHub Actions. Single unified workflow:
 
-- **Generate Articles** (`generate-articles.yml`) — generates news + settlement articles, daily at 12:00 UTC + manual
+- **Generate Articles** (`generate-articles.yml`) — generates news + settlement articles, daily at 15:00 UTC (9 AM Central) + manual
 
-The `CONTENT_TYPE` input controls what gets generated: `mixed` (default, roughly half news/half settlements), `news`, or `settlement`. Categories are auto-balanced to keep hub pages even.
+The `CONTENT_TYPE` input controls what gets generated: `mixed` (default, roughly half news/half settlements), `news`, or `settlement`. Categories are auto-balanced to keep hub pages even. Default output is 1 article per run.
 
 3-job pipeline:
-1. **generate** — Perplexity researches → Claude Haiku drafts article (`scripts/generate_articles.py`)
-2. **review** — fact-check → fact-update → human-tone rewrite (Claude Sonnet)
+1. **generate** — Discovery phase (Perplexity finds ~50 cases, stores in `case_candidates` backlog) → selects oldest candidate → Perplexity deep-researches → Claude Haiku drafts article (`scripts/generate_articles.py`)
+2. **review** — fact-check → fact-update → human-tone rewrite (Claude Sonnet). Only runs on generate success.
 3. **images** — Claude Haiku writes prompt → GPT Image 1.5 generates photorealistic hero image (2 retry attempts per image, strict gate blocks deploy if ANY image fails) → Cloudflare Pages rebuild via deploy hook
 
+### Case Discovery & Backlog
+Each run discovers ~50 candidate cases per category/content_type via Perplexity, deduplicates them against existing articles and candidates using `is_case_duplicate()`, and stores new ones in the `case_candidates` table. A per-category/content_type backlog cap (100) prevents any single category from dominating. Articles are generated from the oldest unprocessed candidate; if the backlog is empty, falls back to direct research.
+
 ### Deduplication
-Multi-layer keyword-based Jaccard similarity (`scripts/lib/dedup.py`). Three checkpoints:
-1. **Pre-research avoidance** — `build_avoidance_data()` extracts company names + titles from DB, sent to Perplexity prompt to avoid known topics. Category-scoped (same-category articles prioritized). Multi-retry (up to 2 retries with progressively stronger avoidance lists).
-2. **Post-research check** — `check_research_context()` extracts "X v. Y" patterns and labeled fields from Perplexity output, Jaccard-checks against existing articles.
-3. **Post-generation check** — `is_duplicate()` compares generated title + case_name against all existing (Jaccard >= 0.4). Intra-batch tracking ensures articles within the same run don't duplicate each other.
+Hybrid approach: category-scoped soft checks for discovery relevance, global hard checks for case identity.
+
+1. **Case-identity dedup** (`is_case_duplicate()`) — blocks duplicate cases globally across all categories using docket number match, 75% case title similarity (SequenceMatcher), or defendant + court + filing date (±3 days). Does NOT block by company name alone.
+2. **Pre-research avoidance** — `build_avoidance_data()` extracts company names + titles from DB, sent to Perplexity prompt to avoid known topics. Category-scoped (last 50 in same category). Multi-retry (up to 2 retries with progressively stronger avoidance lists).
+3. **Post-research check** — `check_research_context()` extracts "X v. Y" patterns and labeled fields from Perplexity output. Category-scoped (same-category articles only) to prevent cross-category false positives.
+4. **Post-generation check** — `is_duplicate()` compares generated title + case_name against all existing globally (Jaccard >= 0.35). Intra-batch tracking ensures articles within the same run don't duplicate each other.
 
 ## Deploy
 Push to `main` triggers Cloudflare Pages build. The pipeline also triggers a rebuild via `DEPLOY_HOOK_URL` after publishing content.
