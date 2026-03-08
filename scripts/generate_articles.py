@@ -910,6 +910,9 @@ def main():
 
                 # Build category-scoped avoidance for prompts (last 50 in same category)
                 cat_avoidance = _category_avoidance(existing_articles, category)
+                # Category-scoped articles for research overlap checks (prevents
+                # cross-category false positives like AT&T stocks vs AT&T wage case)
+                cat_existing_articles = [a for a in existing_articles if a.get("category") == category]
 
                 # Step 1: Try to select a pre-vetted candidate from the backlog
                 topic_hint = None
@@ -964,8 +967,9 @@ def main():
                     attempt_label = f"(research {retry + 1}/{max_research_retries + 1}) " if retry > 0 else ""
                     print(f"  ✓ Research {attempt_label}complete ({len(research_context)} chars)")
 
-                    # Check if research covers an already-existing topic
-                    is_dup, matched_title = check_research_context(research_context, existing_articles)
+                    # Check if research covers an already-existing topic (category-scoped
+                    # to avoid cross-category false positives from shared company names)
+                    is_dup, matched_title = check_research_context(research_context, cat_existing_articles)
                     if not is_dup:
                         research_is_dup = False
                         break  # Research is clean — proceed to generation
