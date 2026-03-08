@@ -9,9 +9,9 @@
 >
   <div class="sticky-banner__inner">
     <div class="sticky-banner__text">
-      <h2 class="sticky-banner__headline">Claim Your Free Cash!</h2>
+      <h2 class="sticky-banner__headline">💰 You Might Be Owed Money — Find Out Free</h2>
       <p class="sticky-banner__subtext">
-        Join countless subscribers who got settlements from being notified via ClassActionLaw directly to their inbox.
+        Join <strong class="sticky-banner__highlight">15,000+</strong> members who get notified about settlements they qualify for. <span class="sticky-banner__urgency">3 settlements closing this week.</span>
       </p>
     </div>
 
@@ -20,13 +20,13 @@
         <input
           type="email"
           id="sticky-banner-email"
-          placeholder="john@example.com"
+          placeholder="Enter your email address"
           required
           autocomplete="email"
           class="sticky-banner__input"
         />
         <button type="submit" id="sticky-banner-btn" class="sticky-banner__button">
-          Subscribe
+          Get Alerts Free →
         </button>
       </div>
     </form>
@@ -50,164 +50,70 @@
 </div>
 
 <style>
+  @keyframes subtlePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+    50%      { box-shadow: 0 0 16px 4px rgba(34, 197, 94, 0.25); }
+  }
+
   .sticky-banner {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     z-index: 9999;
-    background: #162c54;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
-    padding: 20px 24px;
+    background: linear-gradient(135deg, #0f2027 0%, #1a3a5c 50%, #0f4c3a 100%);
+    box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.45);
+    border-top: 3px solid #22c55e;
+    padding: 18px 28px;
     transform: translateY(100%);
     transition: transform 0.5s ease;
   }
 
-  .sticky-banner--visible {
-    transform: translateY(0);
-  }
+  .sticky-banner--visible { transform: translateY(0); }
 
-  .sticky-banner__inner {
-    max-width: 1200px;
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    gap: 24px;
-  }
+  .sticky-banner__inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; gap: 24px; }
 
-  .sticky-banner__text {
-    flex: 1;
-    min-width: 0;
-  }
+  .sticky-banner__text { flex: 1; min-width: 0; }
 
-  .sticky-banner__headline {
-    font-family: "Source Serif 4", Georgia, serif;
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: rgba(255, 255, 255, 0.9);
-    margin: 0 0 4px 0;
-    line-height: 1.3;
-  }
+  .sticky-banner__headline { font-family: "Source Serif 4", Georgia, serif; font-size: 1.375rem; font-weight: 800; color: #ffffff; margin: 0 0 4px; line-height: 1.3; letter-spacing: -0.3px; }
 
-  .sticky-banner__subtext {
-    font-family: "Source Sans 3", system-ui, sans-serif;
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.8);
-    margin: 0;
-    line-height: 1.4;
-  }
+  .sticky-banner__subtext { font-family: "Source Sans 3", system-ui, sans-serif; font-size: 0.875rem; color: rgba(255, 255, 255, 0.85); margin: 0; line-height: 1.4; }
 
-  .sticky-banner__form {
-    flex-shrink: 0;
-  }
+  .sticky-banner__highlight { color: #22c55e; font-weight: 700; }
 
-  .sticky-banner__input-group {
-    display: flex;
-    gap: 8px;
-  }
+  .sticky-banner__urgency { color: #fbbf24; }
 
-  .sticky-banner__input {
-    font-family: "Source Sans 3", system-ui, sans-serif;
-    font-size: 16px;
-    padding: 12px 16px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    outline: none;
-    min-width: 240px;
-    color: #1f2937;
-  }
+  .sticky-banner__form { flex-shrink: 0; }
 
-  .sticky-banner__input:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
-  }
+  .sticky-banner__input-group { display: flex; gap: 8px; }
 
-  .sticky-banner__button {
-    font-family: "Source Sans 3", system-ui, sans-serif;
-    font-size: 16px;
-    font-weight: 600;
-    padding: 12px 24px;
-    background: #1e3a6e;
-    color: rgba(255, 255, 255, 0.9);
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.2s ease;
-  }
+  .sticky-banner__input { font-family: "Source Sans 3", system-ui, sans-serif; font-size: 15px; padding: 14px 18px; border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 10px; outline: none; min-width: 240px; color: #1f2937; background: rgba(255, 255, 255, 0.95); transition: border-color 0.2s ease; }
 
-  .sticky-banner__button:hover {
-    background: #253f72;
-  }
+  .sticky-banner__input:focus { border-color: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
 
-  .sticky-banner__button:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
+  .sticky-banner__button { font-family: "Source Sans 3", system-ui, sans-serif; font-size: 17px; font-weight: 700; padding: 14px 36px; background: #22c55e; color: #ffffff; border: none; border-radius: 10px; cursor: pointer; white-space: nowrap; letter-spacing: 0.3px; transition: background 0.2s ease, transform 0.2s ease; animation: subtlePulse 2.5s infinite; }
 
-  .sticky-banner__message {
-    font-family: "Source Sans 3", system-ui, sans-serif;
-    font-size: 1rem;
-    font-weight: 600;
-    margin: 0;
-    flex-shrink: 0;
-  }
+  .sticky-banner__button:hover { background: #16a34a; transform: scale(1.03); }
 
-  .sticky-banner__message--success {
-    color: #34d399;
-  }
+  .sticky-banner__button:disabled { opacity: 0.7; cursor: not-allowed; animation: none; }
 
-  .sticky-banner__message--error {
-    color: #f87171;
-  }
+  .sticky-banner__message { font-family: "Source Sans 3", system-ui, sans-serif; font-size: 1rem; font-weight: 600; margin: 0; flex-shrink: 0; }
 
-  .sticky-banner__close {
-    position: absolute;
-    top: 8px;
-    right: 12px;
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
-    padding: 4px 8px;
-    transition: color 0.2s ease;
-  }
+  .sticky-banner__message--success { color: #34d399; }
 
-  .sticky-banner__close:hover {
-    color: rgba(255, 255, 255, 1);
-  }
+  .sticky-banner__message--error { color: #f87171; }
 
-  /* Mobile: ≤768px */
+  .sticky-banner__close { position: absolute; top: 8px; right: 12px; background: none; border: none; color: rgba(255, 255, 255, 0.5); font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 4px 8px; transition: color 0.2s ease; }
+
+  .sticky-banner__close:hover { color: #ffffff; }
+
   @media (max-width: 768px) {
-    .sticky-banner {
-      padding: 16px 16px 20px;
-    }
-
-    .sticky-banner__inner {
-      flex-direction: column;
-      text-align: center;
-      gap: 12px;
-    }
-
-    .sticky-banner__form {
-      width: 100%;
-    }
-
-    .sticky-banner__input-group {
-      flex-direction: column;
-      width: 100%;
-    }
-
-    .sticky-banner__input {
-      min-width: 0;
-      width: 100%;
-    }
-
-    .sticky-banner__button {
-      width: 100%;
-    }
+    .sticky-banner { padding: 16px 16px 20px; }
+    .sticky-banner__inner { flex-direction: column; text-align: center; gap: 12px; }
+    .sticky-banner__form { width: 100%; }
+    .sticky-banner__input-group { flex-direction: column; width: 100%; }
+    .sticky-banner__input { min-width: 0; width: 100%; }
+    .sticky-banner__button { width: 100%; }
   }
 </style>
 
