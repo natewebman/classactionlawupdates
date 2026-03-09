@@ -51,8 +51,8 @@
 
 <style>
   @keyframes subtlePulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
-    50%      { box-shadow: 0 0 16px 4px rgba(34, 197, 94, 0.25); }
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.02); }
   }
 
   .sticky-banner {
@@ -91,9 +91,9 @@
 
   .sticky-banner__input:focus { border-color: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
 
-  .sticky-banner__button { font-family: "Source Sans 3", system-ui, sans-serif; font-size: 17px; font-weight: 700; padding: 14px 36px; background: #22c55e; color: #ffffff; border: none; border-radius: 10px; cursor: pointer; white-space: nowrap; letter-spacing: 0.3px; transition: background 0.2s ease, transform 0.2s ease; animation: subtlePulse 2.5s infinite; }
+  .sticky-banner__button { font-family: "Source Sans 3", system-ui, sans-serif; font-size: 17px; font-weight: 700; padding: 14px 36px; background: #22c55e; color: #ffffff; border: none; border-radius: 10px; cursor: pointer; white-space: nowrap; letter-spacing: 0.3px; transition: background 0.2s ease, transform 0.2s ease; animation: subtlePulse 2.5s ease-in-out infinite; }
 
-  .sticky-banner__button:hover { background: #16a34a; transform: scale(1.03); }
+  .sticky-banner__button:hover { background: #16a34a; }
 
   .sticky-banner__button:disabled { opacity: 0.7; cursor: not-allowed; animation: none; }
 
@@ -118,8 +118,6 @@
 </style>
 
 <script>
-  import { addSubscriber } from '../lib/supabase';
-
   const banner = document.getElementById('sticky-banner');
   const form = document.getElementById('sticky-banner-form') as HTMLFormElement | null;
   const emailInput = document.getElementById('sticky-banner-email') as HTMLInputElement | null;
@@ -165,12 +163,12 @@
         const utm_campaign = params.get('utm_campaign') || undefined;
 
         try {
-          const result = await addSubscriber({
-            email,
-            source: 'sticky_banner',
-            utm_source,
-            utm_campaign,
+          const res = await fetch('/api/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, source: 'sticky_banner', utm_source, utm_campaign }),
           });
+          const result = await res.json();
 
           if (result.success) {
             form.hidden = true;
@@ -180,12 +178,12 @@
           } else {
             errorMsg.hidden = false;
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Subscribe';
+            submitBtn.textContent = 'Get Alerts Free \u2192';
           }
         } catch {
           errorMsg.hidden = false;
           submitBtn.disabled = false;
-          submitBtn.textContent = 'Subscribe';
+          submitBtn.textContent = 'Get Alerts Free \u2192';
         }
       });
     }

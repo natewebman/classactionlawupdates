@@ -49,8 +49,8 @@ function iconClasses(i: number): string {
     if (i === 4) return `${base} text-red-500`;
     return `${base} text-blue-600`;
   }
-  if (i === 4) return `${base} text-gray-400`;
-  return i <= currentStep ? `${base} text-blue-600` : `${base} text-gray-400`;
+  if (i === 4) return `${base} text-gray-500`;
+  return i <= currentStep ? `${base} text-blue-600` : `${base} text-gray-500`;
 }
 
 function labelClasses(i: number): string {
@@ -59,10 +59,10 @@ function labelClasses(i: number): string {
     if (i === 4) return `${base} text-red-700 font-semibold`;
     return `${base} text-gray-700`;
   }
-  if (i === 4) return `${base} text-gray-400`;
+  if (i === 4) return `${base} text-gray-500`;
   if (i === currentStep) return `${base} text-gray-900 font-semibold`;
   if (i <= currentStep) return `${base} text-gray-700`;
-  return `${base} text-gray-400`;
+  return `${base} text-gray-500`;
 }
 
 function barWidth(i: number): string {

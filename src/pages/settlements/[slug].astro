@@ -196,7 +196,10 @@ const stateName = stateSlug ? US_STATES[stateSlug] : null;
               <img
                 src={meta.heroImage}
                 alt={meta.heroImageAlt ?? article.title}
-                class="w-full h-auto rounded-lg object-cover max-h-[460px]"
+                class="w-full rounded-lg object-cover max-h-[460px]"
+                width="1536"
+                height="1024"
+                fetchpriority="high"
                 loading="eager"
               />
             </figure>
