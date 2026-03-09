@@ -1,0 +1,37 @@
+---
+interface Props {
+  /** AdSense ad slot ID */
+  slotId: string;
+  /** Ad format */
+  format?: 'auto' | 'horizontal' | 'vertical' | 'rectangle';
+  /** CSS classes for the wrapper div */
+  className?: string;
+}
+
+const {
+  slotId,
+  format = 'auto',
+  className = '',
+} = Astro.props;
+---
+
+<div class={className}>
+  <ins
+    class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-7899412908629784"
+    data-ad-slot={slotId}
+    data-ad-format={format}
+    {...(format === 'auto' ? { 'data-full-width-responsive': 'true' } : {})}
+  ></ins>
+</div>
+
+<script is:inline>
+  // is:inline required: Astro deduplicates bundled scripts, but each ad slot
+  // needs its own push() call. Without is:inline this only fires once per page.
+  try {
+    (window.adsbygoogle = window.adsbygoogle || []).push({});
+  } catch (_) {
+    // Ad blocker or AdSense load failure — non-critical
+  }
+</script>
