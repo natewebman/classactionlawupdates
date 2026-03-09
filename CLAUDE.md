@@ -9,13 +9,14 @@ Class action lawsuit news and settlement tracker. Auto-generates, fact-checks, a
 - **Hosting:** Cloudflare Pages (static + SSR hybrid)
 - **Framework:** Astro 5.7 + Tailwind CSS 3.4
 - **Content AI:** Claude (Anthropic), Perplexity, GPT Image 1.5 (OpenAI)
+- **Ads:** Google AdSense (`ca-pub-7899412908629784`)
 
 ## Local Development
 ```bash
 npm install
 cp .env.example .env   # Fill in Supabase keys
 npm run dev             # http://localhost:4321
-npm run validate:seo    # Run 58-check SEO validation
+npm run validate:seo    # Run 67-check SEO validation
 ```
 
 ## Architecture
@@ -39,6 +40,12 @@ Articles that fail fact-checking are regenerated (up to 2 retries) before being 
 - **Prerendered** (static at build): homepage, category hubs, about, editorial-policy, static pages
 - **SSR** (`prerender = false`): settlement details, news details, news index, open settlements, deadlines ending soon, settlement database, brand pages, state pages, sitemap-articles.xml, content-stats API
 - **Hero image fallback**: settlement and news detail pages show a gradient placeholder when `hero_image` is null
+- **Hero image optimization**: hero `<img>` tags include `width="1536" height="1024"` and `fetchpriority="high"` for LCP/CLS
+
+### Ads
+- Google AdSense script loaded asynchronously in `BaseLayout.astro` with `dns-prefetch` and `preconnect` hints
+- `AdSlot.astro` — reusable component with `slotId`, `format`, and `className` props. Uses `is:inline` script to ensure each ad slot gets its own `adsbygoogle.push()` call (Astro deduplicates bundled scripts)
+- No ad placements are wired up yet — only the infrastructure is in place
 
 ## Page Types
 
@@ -59,6 +66,7 @@ Articles that fail fact-checking are regenerated (up to 2 retries) before being 
 | `/editorial-policy` | Static | Editorial policy |
 | `/unsubscribe` | Static | Unsubscribe from email alerts |
 | `/api/content-stats` | SSR | JSON endpoint with article counts and category breakdown |
+| `/api/subscribe` | SSR | POST endpoint for email subscriptions (used by StickyBanner) |
 | `/sitemap-articles.xml` | SSR | Dynamic XML sitemap for all SSR pages |
 
 ## Key Library Modules
@@ -147,6 +155,12 @@ Hybrid approach: category-scoped soft checks for discovery relevance, global har
 2. **Pre-research avoidance** — `build_avoidance_data()` extracts company names + titles from DB, sent to Perplexity prompt to avoid known topics. Category-scoped (last 50 in same category). Multi-retry (up to 2 retries with progressively stronger avoidance lists).
 3. **Post-research check** — `check_research_context()` extracts "X v. Y" patterns and labeled fields from Perplexity output. Category-scoped (same-category articles only) to prevent cross-category false positives.
 4. **Post-generation check** — `is_duplicate()` compares generated title + case_name against all existing globally (Jaccard >= 0.35). Intra-batch tracking ensures articles within the same run don't duplicate each other.
+
+## HTTP Headers (`public/_headers`)
+- **Security**: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera/mic/geo denied), HSTS (2 year max-age, includeSubDomains, preload)
+- **AI crawling**: `X-Robots-Tag: ai-train=no, ai-input=yes`
+- **Cache**: `/_astro/*` immutable (1 year) — files have content hashes. `/favicon.svg` 1 week.
+- **Not added yet**: CSP (needs audit of inline scripts + external origins), COOP (may break AdSense popups), `/images/*` cache
 
 ## Deploy
 Push to `main` triggers Cloudflare Pages build. The pipeline also triggers a rebuild via `DEPLOY_HOOK_URL` after publishing content.
