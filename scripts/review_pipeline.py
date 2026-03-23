@@ -419,12 +419,14 @@ def process_article(article: dict, site_db, admin_db, claude_client: anthropic.A
             if "title" in updates and updates["title"] != old_title:
                 print(f"   ↳ New title: {updates['title'][:70]}")
 
-            # Post-regeneration duplicate check (filter out self-match)
-            new_title = updates.get("title", article.get("title", ""))
+            # Post-regeneration duplicate check (filter out self-match).
+            # Use old_title + article_id to exclude the current article,
+            # since article dict was already mutated with new values above.
+            new_title = updates.get("title", old_title)
             new_case = updates.get("case_name", article.get("case_name"))
             existing_for_dedup = [
                 e for e in existing_articles
-                if e.get("title") != article.get("title")
+                if e.get("id") != article_id and e.get("title") != old_title
             ]
             if existing_for_dedup and is_duplicate(new_title, new_case, existing_for_dedup):
                 print(f"   ⚠ Regenerated article is a DUPLICATE — marking failed")
@@ -510,7 +512,7 @@ def main():
     existing_titles = []
     try:
         existing = site_db.table("articles") \
-            .select("title, case_name") \
+            .select("id, title, case_name") \
             .neq("content_stage", "failed") \
             .execute()
         existing_articles = existing.data or []
