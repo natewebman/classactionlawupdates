@@ -109,6 +109,43 @@ DEFAULT_CATEGORIES = [
     "online-privacy",
 ]
 
+# Semantic descriptions for each category — used in Perplexity discovery
+# and Claude generation prompts to prevent miscategorization.
+CATEGORY_DESCRIPTIONS = {
+    "stocks": (
+        "Securities fraud, shareholder class actions, stock manipulation, "
+        "insider trading, IPO fraud, SEC violations, and investor lawsuits "
+        "against publicly traded companies for misleading financial statements "
+        "or stock price drops. Must involve stocks, securities, or investment fraud."
+    ),
+    "personal-injury": (
+        "Bodily injury, wrongful death, toxic exposure (PFAS, asbestos, chemicals), "
+        "environmental contamination, workplace injuries, defective medical devices, "
+        "and mass torts causing physical harm to people."
+    ),
+    "product-recalls": (
+        "Defective consumer products, product safety recalls, false advertising "
+        "about product features, mislabeling, contaminated food/beverages, "
+        "auto defects, and consumer protection lawsuits about specific products."
+    ),
+    "drugs-pharmacy": (
+        "Pharmaceutical lawsuits, dangerous drug side effects, pharmacy overcharging, "
+        "opioid litigation, PBM practices, drug pricing, medical device failures "
+        "related to pharmaceuticals, and health insurance disputes."
+    ),
+    "financial": (
+        "Banking, lending, credit card, mortgage, and insurance lawsuits. "
+        "Includes fee disputes, predatory lending, debt collection abuse, "
+        "CARES Act/PPP loan issues, overdraft fees, account fraud, and "
+        "consumer financial protection cases. NOT stocks or securities fraud."
+    ),
+    "online-privacy": (
+        "Data breaches, privacy violations, BIPA/CCPA lawsuits, unauthorized "
+        "tracking/cookies, social media privacy, wiretapping, geolocation tracking, "
+        "spam/TCPA robocall cases, and digital rights violations."
+    ),
+}
+
 SCRIPT_DIR = Path(__file__).parent
 
 
@@ -240,6 +277,14 @@ def assign_content_types(count: int) -> list[str]:
         return types
 
 
+def _category_guidance(category: str) -> str:
+    """Return a short category scope description for use in prompts."""
+    desc = CATEGORY_DESCRIPTIONS.get(category)
+    if desc:
+        return f'\n\nIMPORTANT — "{category}" category scope: {desc}\nOnly include cases that clearly fit this scope.\n'
+    return ""
+
+
 # =============================================================================
 # PERPLEXITY RESEARCH
 # =============================================================================
@@ -304,6 +349,8 @@ def research_topic(category: str, avoidance_data: dict = None, topic_hint: str =
     """
     avoid_section = _build_avoid_section(avoidance_data)
 
+    cat_guidance = _category_guidance(category)
+
     if topic_hint:
         # Focused research on a specific pre-vetted topic
         user_content = (
@@ -313,6 +360,7 @@ def research_topic(category: str, avoidance_data: dict = None, topic_hint: str =
             f"specific allegations, timeline, current status, and consumer impact.\n\n"
             f"Include source URLs.\n"
             f"Limit response to 300-500 words. Use bullet points."
+            + cat_guidance
         )
     else:
         # Original broad research (fallback when no candidates)
@@ -328,6 +376,7 @@ def research_topic(category: str, avoidance_data: dict = None, topic_hint: str =
             "- Source URLs\n\n"
             "Focus on lawsuits that are active or recently settled.\n"
             "Limit response to 300-500 words. Use bullet points."
+            + cat_guidance
             + avoid_section
         )
 
@@ -349,6 +398,8 @@ def research_settlement(category: str, topic_url: str = "", topic_idea: str = ""
     avoid_section = ""
     if avoidance_data and not topic_url and not topic_idea:
         avoid_section = _build_avoid_section(avoidance_data)
+
+    cat_guidance = _category_guidance(category)
 
     if topic_url:
         user_content = (
@@ -377,6 +428,7 @@ def research_settlement(category: str, topic_url: str = "", topic_idea: str = ""
             "- Current litigation status\n"
             "- Source URLs\n\n"
             "Limit response to 300-500 words. Use bullet points."
+            + cat_guidance
         )
     else:
         user_content = (
@@ -393,6 +445,7 @@ def research_settlement(category: str, topic_url: str = "", topic_idea: str = ""
             "- Source URLs\n\n"
             "Focus on settlements where the claim deadline has NOT passed.\n"
             "Limit response to 300-500 words. Use bullet points."
+            + cat_guidance
             + avoid_section
         )
 
@@ -683,7 +736,7 @@ def discover_and_store_topics(
     # Select query angle (rotate through available angles)
     angles = _DISCOVERY_ANGLES.get(content_type, _DISCOVERY_ANGLES["news"])
     angle_idx = angle % len(angles)
-    user_content = angles[angle_idx].format(category=category) + avoid_section
+    user_content = angles[angle_idx].format(category=category) + _category_guidance(category) + avoid_section
 
     _ANGLE_NAMES = ['standard', 'lesser-known', 'state-courts', 'recent-approvals/emerging']
     if angle_idx > 0:
