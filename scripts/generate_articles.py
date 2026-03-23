@@ -33,6 +33,7 @@ import time
 import random
 import traceback
 from collections import defaultdict
+from difflib import SequenceMatcher
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -453,15 +454,213 @@ def _parse_candidates(response: str) -> list[dict]:
     return candidates
 
 
+def _build_discovery_avoid_section(site_db, site_id: str, category: str) -> str:
+    """Build a compact avoidance section for discovery prompts from existing articles + candidates."""
+    try:
+        # Get recent articles in this category
+        articles = site_db.table("articles") \
+            .select("title, case_name") \
+            .eq("site_id", site_id) \
+            .eq("category", category) \
+            .neq("content_stage", "failed") \
+            .order("created_at", desc=True) \
+            .limit(60) \
+            .execute().data or []
+
+        # Get recent candidates in this category
+        candidates = site_db.table("case_candidates") \
+            .select("case_title, defendant") \
+            .eq("site_id", site_id) \
+            .eq("category", category) \
+            .order("discovered_at", desc=True) \
+            .limit(60) \
+            .execute().data or []
+
+        # Build compact company + case list
+        known_cases = set()
+        known_companies = set()
+        for a in articles:
+            if a.get("title"):
+                known_cases.add(a["title"])
+            if a.get("case_name"):
+                known_cases.add(a["case_name"])
+                company = extract_company_from_case_name(a["case_name"])
+                if company:
+                    known_companies.add(company)
+        for c in candidates:
+            if c.get("case_title"):
+                known_cases.add(c["case_title"])
+            if c.get("defendant"):
+                known_companies.add(c["defendant"])
+
+        if not known_cases and not known_companies:
+            return ""
+
+        parts = []
+        if known_companies:
+            parts.append("Companies already covered: " + ", ".join(sorted(known_companies)[:40]))
+        if known_cases:
+            parts.append("Cases already covered:\n" + "\n".join(f"- {c}" for c in sorted(known_cases)[:30]))
+
+        return (
+            "\n\nIMPORTANT — DO NOT include any of these known cases or companies:\n"
+            + "\n".join(parts)
+            + "\n\nFind DIFFERENT, LESSER-KNOWN cases not listed above.\n"
+        )
+    except Exception as e:
+        print(f"    ⚠️ Could not build discovery avoidance: {e}")
+        return ""
+
+
+# Different query angles to rotate through for broader discovery
+_DISCOVERY_ANGLES = {
+    "settlement": [
+        # Angle 0: Standard (original)
+        (
+            "List 50 recent class action SETTLEMENTS in the '{category}' category "
+            "where consumers can still file claims. For each, provide on a single line:\n"
+            "Case Name | Defendant | Court | Filing/Settlement Date | Docket Number (if known) | Source URL\n\n"
+            "Use the exact format above with pipe separators. "
+            "Focus on settlements filed within the past 24 months."
+        ),
+        # Angle 1: Lesser-known / smaller settlements
+        (
+            "List 50 LESSER-KNOWN class action settlements in the '{category}' category "
+            "where consumers can still file claims. Focus on cases that received LESS media attention — "
+            "smaller settlement amounts, regional cases, or cases in less prominent courts. "
+            "Avoid major headline settlements. For each, provide on a single line:\n"
+            "Case Name | Defendant | Court | Filing/Settlement Date | Docket Number (if known) | Source URL\n\n"
+            "Use the exact format above with pipe separators. "
+            "Search across federal AND state courts from the past 36 months."
+        ),
+        # Angle 2: State courts and regional
+        (
+            "List 50 class action settlements from STATE COURTS (not federal) in the '{category}' category "
+            "where consumers can still file claims. Include cases from California, New York, Illinois, "
+            "Texas, Florida, Pennsylvania, and other state courts. For each, provide on a single line:\n"
+            "Case Name | Defendant | Court | Filing/Settlement Date | Docket Number (if known) | Source URL\n\n"
+            "Use the exact format above with pipe separators. "
+            "Focus on settlements from the past 24 months."
+        ),
+        # Angle 3: Newly filed / preliminary approval
+        (
+            "List 50 class action settlements in the '{category}' category that received "
+            "PRELIMINARY APPROVAL or FINAL APPROVAL in the past 6 months. Include cases where "
+            "the claims process just opened. For each, provide on a single line:\n"
+            "Case Name | Defendant | Court | Approval Date | Docket Number (if known) | Source URL\n\n"
+            "Use the exact format above with pipe separators."
+        ),
+    ],
+    "news": [
+        # Angle 0: Standard (original)
+        (
+            "List 50 recent class action LAWSUITS in the '{category}' category. "
+            "For each, provide on a single line:\n"
+            "Case Name | Defendant | Court | Filing Date | Docket Number (if known) | Source URL\n\n"
+            "Use the exact format above with pipe separators. "
+            "Focus on lawsuits filed within the past 24 months with significant consumer impact."
+        ),
+        # Angle 1: Very recently filed
+        (
+            "List 50 class action lawsuits in the '{category}' category that were "
+            "FILED IN THE LAST 3 MONTHS. Include newly certified classes, new MDL consolidations, "
+            "and recently amended complaints. For each, provide on a single line:\n"
+            "Case Name | Defendant | Court | Filing Date | Docket Number (if known) | Source URL\n\n"
+            "Use the exact format above with pipe separators."
+        ),
+        # Angle 2: Lesser-known / regional
+        (
+            "List 50 LESSER-KNOWN class action lawsuits in the '{category}' category. "
+            "Focus on cases that received less media attention — smaller companies, regional cases, "
+            "state court filings, or cases in less prominent jurisdictions. "
+            "Avoid major headline cases. For each, provide on a single line:\n"
+            "Case Name | Defendant | Court | Filing Date | Docket Number (if known) | Source URL\n\n"
+            "Use the exact format above with pipe separators. "
+            "Search across the past 36 months."
+        ),
+        # Angle 3: Specific legal theories
+        (
+            "List 50 class action lawsuits in the '{category}' category focusing on "
+            "EMERGING LEGAL THEORIES: BIPA violations, CCPA/state privacy laws, PFAS contamination, "
+            "greenwashing, subscription traps, dark patterns, algorithmic discrimination, or "
+            "gig economy misclassification. For each, provide on a single line:\n"
+            "Case Name | Defendant | Court | Filing Date | Docket Number (if known) | Source URL\n\n"
+            "Use the exact format above with pipe separators. "
+            "Include cases from the past 24 months."
+        ),
+    ],
+}
+
+
+def _build_global_dedup_pool(site_db, site_id: str) -> list[dict]:
+    """Build global hard dedup pool from all articles + candidates."""
+    global_candidates = site_db.table("case_candidates") \
+        .select("case_title, defendant, court, filing_date, docket_number, category") \
+        .eq("site_id", site_id) \
+        .execute().data or []
+
+    global_articles = site_db.table("articles") \
+        .select("title, case_name, category") \
+        .eq("site_id", site_id) \
+        .neq("content_stage", "failed") \
+        .execute().data or []
+
+    hard_dedup_pool = []
+    for a in global_articles:
+        hard_dedup_pool.append({
+            "case_title": a.get("case_name") or a.get("title", ""),
+            "defendant": None,
+            "court": None,
+            "filing_date": None,
+            "docket_number": None,
+        })
+    hard_dedup_pool.extend(global_candidates)
+    return hard_dedup_pool
+
+
+def _store_candidates(candidates: list[dict], hard_dedup_pool: list[dict],
+                      site_db, site_id: str, category: str, content_type: str) -> int:
+    """Dedup candidates against global pool and store new ones. Returns count stored."""
+    new_count = 0
+    for candidate in candidates:
+        if is_case_duplicate(candidate, hard_dedup_pool):
+            print(f"    ↳ Skipping (global case duplicate): {candidate['case_title'][:80]}")
+            continue
+
+        try:
+            site_db.table("case_candidates").insert({
+                "site_id": site_id,
+                "case_title": candidate["case_title"],
+                "defendant": candidate.get("defendant"),
+                "court": candidate.get("court"),
+                "filing_date": candidate.get("filing_date"),
+                "docket_number": candidate.get("docket_number"),
+                "source_url": candidate.get("source_url"),
+                "category": category,
+                "content_type": content_type,
+                "research_summary": candidate.get("research_summary"),
+            }).execute()
+            new_count += 1
+            hard_dedup_pool.append(candidate)
+        except Exception as e:
+            print(f"    ↳ Insert failed (likely DB uniqueness constraint): {e}")
+
+    return new_count
+
+
 def discover_and_store_topics(
     category: str,
     content_type: str,
     site_db,
     site_id: str,
+    angle: int = 0,
 ) -> int:
     """
     Ask Perplexity for ~50 topics, dedup against known cases globally,
     store new ones in case_candidates. Returns count of new candidates stored.
+
+    Uses different query angles (0-3) to find diverse cases. If angle 0 returns 0
+    new candidates, callers should retry with higher angles.
     """
     # Backlog size protection — per category/content_type cap
     backlog = site_db.table("case_candidates") \
@@ -478,26 +677,21 @@ def discover_and_store_topics(
         )
         return 0
 
-    # Build Perplexity prompt for broad discovery
-    if content_type == "settlement":
-        user_content = (
-            f"List 50 recent class action SETTLEMENTS in the '{category}' category "
-            f"where consumers can still file claims. For each, provide on a single line:\n"
-            f"Case Name | Defendant | Court | Filing/Settlement Date | Docket Number (if known) | Source URL\n\n"
-            f"Use the exact format above with pipe separators. "
-            f"Focus on settlements filed within the past 12 months."
-        )
-    else:
-        user_content = (
-            f"List 50 recent class action LAWSUITS in the '{category}' category. "
-            f"For each, provide on a single line:\n"
-            f"Case Name | Defendant | Court | Filing Date | Docket Number (if known) | Source URL\n\n"
-            f"Use the exact format above with pipe separators. "
-            f"Focus on lawsuits filed within the past 12 months with significant consumer impact."
-        )
+    # Build avoidance section from existing articles/candidates
+    avoid_section = _build_discovery_avoid_section(site_db, site_id, category)
+
+    # Select query angle (rotate through available angles)
+    angles = _DISCOVERY_ANGLES.get(content_type, _DISCOVERY_ANGLES["news"])
+    angle_idx = angle % len(angles)
+    user_content = angles[angle_idx].format(category=category) + avoid_section
+
+    _ANGLE_NAMES = ['standard', 'lesser-known', 'state-courts', 'recent-approvals/emerging']
+    if angle_idx > 0:
+        angle_label = _ANGLE_NAMES[angle_idx] if angle_idx < len(_ANGLE_NAMES) else f"angle-{angle_idx}"
+        print(f"    🔀 Using discovery angle {angle_idx}: {angle_label}")
 
     messages = [
-        {"role": "system", "content": "You are a legal research assistant. List real cases with structured metadata."},
+        {"role": "system", "content": "You are a legal research assistant. List real cases with structured metadata. Prioritize cases NOT commonly covered by major class action news sites."},
         {"role": "user", "content": user_content},
     ]
     response = ask_perplexity(messages, max_tokens=2048)
@@ -506,56 +700,10 @@ def discover_and_store_topics(
     candidates = _parse_candidates(response)
 
     # Global case-identity dedup pool (all categories)
-    global_candidates = site_db.table("case_candidates") \
-        .select("case_title, defendant, court, filing_date, docket_number, category") \
-        .eq("site_id", site_id) \
-        .execute().data or []
+    hard_dedup_pool = _build_global_dedup_pool(site_db, site_id)
 
-    global_articles = site_db.table("articles") \
-        .select("title, case_name, category") \
-        .eq("site_id", site_id) \
-        .neq("content_stage", "failed") \
-        .execute().data or []
-
-    # Build global hard dedup pool across all categories
-    hard_dedup_pool = []
-    for a in global_articles:
-        hard_dedup_pool.append({
-            "case_title": a.get("case_name") or a.get("title", ""),
-            "defendant": None,
-            "court": None,
-            "filing_date": None,
-            "docket_number": None,
-        })
-    hard_dedup_pool.extend(global_candidates)
-
-    # Dedup each candidate against GLOBAL pool
-    new_count = 0
-    for candidate in candidates:
-        if is_case_duplicate(candidate, hard_dedup_pool):
-            print(f"    ↳ Skipping (global case duplicate): {candidate['case_title'][:80]}")
-            continue
-
-        # Insert into case_candidates
-        try:
-            site_db.table("case_candidates").insert({
-                "site_id": site_id,
-                "case_title": candidate["case_title"],
-                "defendant": candidate.get("defendant"),
-                "court": candidate.get("court"),
-                "filing_date": candidate.get("filing_date"),
-                "docket_number": candidate.get("docket_number"),
-                "source_url": candidate.get("source_url"),
-                "category": category,
-                "content_type": content_type,
-                "research_summary": candidate.get("research_summary"),
-            }).execute()
-            new_count += 1
-            # Add to global dedup pool for subsequent candidates in this batch
-            hard_dedup_pool.append(candidate)
-        except Exception as e:
-            # DB uniqueness constraint may catch duplicates the app-level dedup missed
-            print(f"    ↳ Insert failed (likely DB uniqueness constraint): {e}")
+    # Dedup and store
+    new_count = _store_candidates(candidates, hard_dedup_pool, site_db, site_id, category, content_type)
 
     print(f"  📋 Discovered {len(candidates)} cases, stored {new_count} new candidates")
     return new_count
@@ -579,6 +727,156 @@ def _handle_candidate_failure(site_db, candidate_id: str, candidate: dict):
             print(f"  ❌ Candidate failed after 3 retries — permanently marked failed")
     except Exception as e:
         print(f"  ⚠️ Failed to update candidate {candidate_id} status: {e}")
+
+
+def discover_case_updates(
+    category: str,
+    content_type: str,
+    site_db,
+    site_id: str,
+) -> dict | None:
+    """
+    Find an existing case with genuinely new developments worth an update article.
+    Returns a dict with case info + update context, or None if nothing found.
+
+    This is the last-resort fallback when no new cases can be found.
+    """
+    # Get published articles in this category, ordered by oldest updated first
+    try:
+        articles = site_db.table("articles") \
+            .select("id, title, case_name, case_status, settlement_amount, claim_deadline, created_at") \
+            .eq("site_id", site_id) \
+            .eq("content_stage", "published") \
+            .eq("category", category) \
+            .order("created_at", desc=False) \
+            .limit(20) \
+            .execute().data or []
+    except Exception as e:
+        print(f"  ⚠️ Could not load articles for update check: {e}")
+        return None
+
+    if not articles:
+        return None
+
+    # Ask Perplexity which of these cases have NEW developments
+    case_list = "\n".join(
+        f"- {a['case_name'] or a['title']}" + (f" (status: {a.get('case_status', 'unknown')})" if a.get('case_status') else "")
+        for a in articles[:15]
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a legal research assistant. Check for NEW developments "
+                "in existing class action cases. Only report cases with genuinely "
+                "new, significant developments — not just minor procedural updates."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Check which of these class action cases have had SIGNIFICANT NEW DEVELOPMENTS "
+                f"in the past 30 days (new rulings, settlement approvals, deadline extensions, "
+                f"appeals, new parties, class certification, amended complaints, etc.):\n\n"
+                f"{case_list}\n\n"
+                f"For each case with new developments, provide:\n"
+                f"Case Name | Type of Update | Summary of New Development | Source URL\n\n"
+                f"Use pipe separators. ONLY include cases with genuinely new, significant news. "
+                f"If none have new developments, respond with 'NO_UPDATES_FOUND'."
+            ),
+        },
+    ]
+
+    try:
+        response = ask_perplexity(messages, max_tokens=1024)
+    except Exception as e:
+        print(f"  ⚠️ Update discovery Perplexity call failed: {e}")
+        return None
+
+    if "NO_UPDATES_FOUND" in response:
+        print(f"  ℹ️ No case updates found for {category}")
+        return None
+
+    # Parse updates — find first valid one
+    for line in response.strip().split('\n'):
+        line = line.strip()
+        if not line or line.startswith('#') or line.startswith('---'):
+            continue
+        line = re.sub(r'^\d+[\.\)]\s*', '', line)
+        parts = [p.strip() for p in line.split('|')]
+        if len(parts) < 3:
+            continue
+
+        update_case_name = parts[0]
+        update_type = parts[1] if len(parts) > 1 else "development"
+        update_summary = parts[2] if len(parts) > 2 else ""
+        source_url = parts[3] if len(parts) > 3 and parts[3].startswith("http") else None
+
+        # Match to an existing article
+        matched_article = None
+        for a in articles:
+            existing_name = (a.get("case_name") or a.get("title", "")).lower()
+            if not existing_name:
+                continue
+            # Simple substring match or high similarity
+            if update_case_name.lower() in existing_name or existing_name in update_case_name.lower():
+                matched_article = a
+                break
+            ratio = SequenceMatcher(None, update_case_name.lower(), existing_name).ratio()
+            if ratio > 0.6:
+                matched_article = a
+                break
+
+        if matched_article:
+            print(f"  📰 Found case update: {update_case_name[:60]} — {update_type}")
+            return {
+                "original_article": matched_article,
+                "update_case_name": update_case_name,
+                "update_type": update_type,
+                "update_summary": update_summary,
+                "source_url": source_url,
+            }
+
+    print(f"  ℹ️ Update responses didn't match any existing articles")
+    return None
+
+
+def research_case_update(update_info: dict, category: str) -> str:
+    """Research a specific case update in depth for an update article."""
+    case_name = update_info.get("update_case_name", "Unknown")
+    update_type = update_info.get("update_type", "development")
+    update_summary = update_info.get("update_summary", "")
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a legal research assistant. Research the latest developments "
+                "in this class action case. Focus on what's NEW — not rehashing the "
+                "original case details. Include source URLs."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Research the latest developments in this class action case:\n\n"
+                f"Case: {case_name}\n"
+                f"Type of update: {update_type}\n"
+                f"Summary: {update_summary}\n\n"
+                f"Provide detailed information about:\n"
+                f"- What specifically changed or was decided\n"
+                f"- When this happened (exact dates)\n"
+                f"- How this affects class members or consumers\n"
+                f"- What comes next in the case\n"
+                f"- Any new deadlines or action items for consumers\n"
+                f"- Source URLs for the new developments\n\n"
+                f"Focus on the NEW developments, not the original case background.\n"
+                f"Limit response to 300-500 words. Use bullet points."
+            ),
+        },
+    ]
+    return ask_perplexity(messages, max_tokens=1024)
 
 
 # =============================================================================
@@ -847,6 +1145,7 @@ def main():
 
     # --- DISCOVERY PHASE ---
     # Discover new case candidates and store in backlog (per category/content_type)
+    # Retries with different query angles and rotates to alternate categories if saturated
     if not TOPIC_URL and not TOPIC_IDEA and site_db_site_id:
         topic_groups = defaultdict(int)
         for idx in range(ARTICLES_COUNT):
@@ -855,16 +1154,67 @@ def main():
             topic_groups[(ct, cat)] += 1
 
         total_discovered = 0
+        saturated_categories = set()  # Track categories where all angles returned 0
+
         for (ct, cat), needed in topic_groups.items():
             print(f"\n🔍 Discovering topics for {ct}/{cat} (need {needed})...")
             try:
-                discovered = discover_and_store_topics(cat, ct, site_db, site_db_site_id)
+                # Try up to 3 different query angles if standard discovery finds nothing
+                discovered = 0
+                for angle in range(4):
+                    discovered = discover_and_store_topics(cat, ct, site_db, site_db_site_id, angle=angle)
+                    if discovered > 0:
+                        break
+                    if angle < 3:
+                        print(f"  🔄 Angle {angle} found 0 new — trying next angle...")
+
                 total_discovered += discovered
+
+                if discovered == 0:
+                    saturated_categories.add((ct, cat))
+                    print(f"  ⚠️ Category {ct}/{cat} appears saturated (0 new from all angles)")
             except Exception as e:
                 print(f"  ⚠️ Discovery failed for {ct}/{cat}: {e}")
                 traceback.print_exc()
 
+        # --- CATEGORY ROTATION for saturated slots ---
+        # If any category/content_type returned 0, try to swap to an alternate category
+        if saturated_categories:
+            print(f"\n🔄 Attempting category rotation for {len(saturated_categories)} saturated slot(s)...")
+            all_cats = DEFAULT_CATEGORIES.copy()
+            assigned_cats = {cat for _, cat in topic_groups.keys()}
+
+            for (ct, sat_cat) in saturated_categories:
+                # Find alternate categories not already assigned
+                alternates = [c for c in all_cats if c not in assigned_cats and c != sat_cat]
+                random.shuffle(alternates)
+
+                rotated = False
+                for alt_cat in alternates:
+                    print(f"  🔄 Trying alternate category: {ct}/{alt_cat}...")
+                    try:
+                        discovered = discover_and_store_topics(alt_cat, ct, site_db, site_db_site_id, angle=0)
+                        if discovered > 0:
+                            # Swap the category in the content plan
+                            for idx in range(ARTICLES_COUNT):
+                                if content_types[idx] == ct and categories[idx] == sat_cat:
+                                    categories[idx] = alt_cat
+                                    print(f"  ✓ Rotated slot {idx} from {sat_cat} → {alt_cat} ({discovered} new candidates)")
+                                    assigned_cats.add(alt_cat)
+                                    total_discovered += discovered
+                                    rotated = True
+                                    break
+                        if rotated:
+                            break
+                    except Exception as e:
+                        print(f"  ⚠️ Alternate discovery failed for {ct}/{alt_cat}: {e}")
+                        continue
+
+                if not rotated:
+                    print(f"  ⚠️ No alternate category had new candidates for {ct} — will try update articles")
+
         print(f"\n📊 Discovery complete: {total_discovered} new candidates stored")
+        print(f"  Updated content plan: {list(zip(content_types, categories))}")
     else:
         print("\n⏭️ Skipping discovery (guided topic or no site_id)")
 
@@ -919,6 +1269,9 @@ def main():
                 candidate_id = None
                 candidate = None
 
+                is_update_article = False
+                update_info = None
+
                 if not TOPIC_URL and not TOPIC_IDEA and site_db_site_id:
                     result = site_db.table("case_candidates") \
                         .select("*") \
@@ -947,63 +1300,91 @@ def main():
                             print(f"  ⚠️ Candidate {candidate_id} could not be claimed — falling back to direct research")
                             candidate_id = None
                     else:
-                        print(f"  ⚠️ No backlog candidates for {article_content_type}/{category} — using direct research")
+                        print(f"  ⚠️ No backlog candidates for {article_content_type}/{category}")
+                        # Last resort: try finding an update article for an existing case.
+                        # Only on retries (attempt >= 1) to prefer new cases on first try.
+                        if attempt >= 1:
+                            print(f"  🔍 Attempting to find case update article...")
+                            update_info = discover_case_updates(
+                                category, article_content_type, site_db, site_db_site_id
+                            )
+                            if update_info:
+                                is_update_article = True
+                                topic_hint = f"UPDATE: {update_info['update_case_name']} — {update_info['update_type']}"
+                                print(f"  📰 Will write update article: {topic_hint[:80]}")
+                            else:
+                                print(f"  ⚠️ No case updates found either — using direct research")
 
                 # Step 2: Research via Perplexity
                 max_research_retries = 2
                 research_context = None
                 research_is_dup = False
 
-                for retry in range(max_research_retries + 1):
-                    if article_content_type == "settlement":
-                        research_context = research_settlement(
-                            category, TOPIC_URL,
-                            TOPIC_IDEA or topic_hint,
-                            cat_avoidance
-                        )
-                    else:
-                        research_context = research_topic(category, cat_avoidance, topic_hint=topic_hint)
+                if is_update_article and update_info:
+                    # Update article: research the new developments, skip dedup
+                    research_context = research_case_update(update_info, category)
+                    print(f"  ✓ Update research complete ({len(research_context)} chars)")
+                    # Prepend update context so Claude knows this is an update
+                    research_context = (
+                        f"NOTE: This is an UPDATE article about new developments in an existing case.\n"
+                        f"Original case: {update_info['update_case_name']}\n"
+                        f"Update type: {update_info['update_type']}\n"
+                        f"The article title MUST clearly indicate this is an update/new development.\n"
+                        f"Use phrases like 'Update:', 'New Ruling in', 'Court Approves', etc.\n\n"
+                        f"{research_context}"
+                    )
+                else:
+                    for retry in range(max_research_retries + 1):
+                        if article_content_type == "settlement":
+                            research_context = research_settlement(
+                                category, TOPIC_URL,
+                                TOPIC_IDEA or topic_hint,
+                                cat_avoidance
+                            )
+                        else:
+                            research_context = research_topic(category, cat_avoidance, topic_hint=topic_hint)
 
-                    attempt_label = f"(research {retry + 1}/{max_research_retries + 1}) " if retry > 0 else ""
-                    print(f"  ✓ Research {attempt_label}complete ({len(research_context)} chars)")
+                        attempt_label = f"(research {retry + 1}/{max_research_retries + 1}) " if retry > 0 else ""
+                        print(f"  ✓ Research {attempt_label}complete ({len(research_context)} chars)")
 
-                    # Check if research covers an already-existing topic (category-scoped
-                    # to avoid cross-category false positives from shared company names)
-                    is_dup, matched_title = check_research_context(research_context, cat_existing_articles)
-                    if not is_dup:
-                        research_is_dup = False
-                        break  # Research is clean — proceed to generation
+                        # Check if research covers an already-existing topic (category-scoped
+                        # to avoid cross-category false positives from shared company names)
+                        is_dup, matched_title = check_research_context(research_context, cat_existing_articles)
+                        if not is_dup:
+                            research_is_dup = False
+                            break  # Research is clean — proceed to generation
 
-                    research_is_dup = True
-                    if retry < max_research_retries:
-                        print(f"  ⚠ Research overlaps existing: {matched_title[:70] if matched_title else 'unknown'}")
-                        print(f"  ↻ Retrying with stronger avoidance...")
-                        # Strengthen avoidance for next attempt
-                        if matched_title:
-                            cat_avoidance["titles"].append(matched_title)
-                            cat_avoidance["keywords"].append(extract_keywords(matched_title))
-                    else:
-                        print(f"  ✗ Still overlaps after {max_research_retries} retries: {matched_title[:70] if matched_title else 'unknown'}")
+                        research_is_dup = True
+                        if retry < max_research_retries:
+                            print(f"  ⚠ Research overlaps existing: {matched_title[:70] if matched_title else 'unknown'}")
+                            print(f"  ↻ Retrying with stronger avoidance...")
+                            # Strengthen avoidance for next attempt
+                            if matched_title:
+                                cat_avoidance["titles"].append(matched_title)
+                                cat_avoidance["keywords"].append(extract_keywords(matched_title))
+                        else:
+                            print(f"  ✗ Still overlaps after {max_research_retries} retries: {matched_title[:70] if matched_title else 'unknown'}")
 
-                if research_is_dup:
-                    # Mark candidate as failed if we were using backlog
-                    if candidate_id:
-                        _handle_candidate_failure(site_db, candidate_id, candidate)
-                    break  # All research retries exhausted — give up on this article slot
+                    if research_is_dup:
+                        # Mark candidate as failed if we were using backlog
+                        if candidate_id:
+                            _handle_candidate_failure(site_db, candidate_id, candidate)
+                        break  # All research retries exhausted — give up on this article slot
 
-                # Step 2b: Pre-generation topic coverage check
+                # Step 2b: Pre-generation topic coverage check (skip for update articles)
                 # Catches cases where check_research_context() misses overlap because
                 # the research doesn't use exact "X v. Y" formatting
-                topic_covered, topic_match = is_topic_covered(research_context, cat_avoidance)
-                if topic_covered:
-                    print(f"  ⚠ Research topic already covered: {topic_match[:70] if topic_match else 'unknown'}")
-                    if topic_match:
-                        cat_avoidance["titles"].append(topic_match)
-                        cat_avoidance["keywords"].append(extract_keywords(topic_match))
-                    if candidate_id:
-                        _handle_candidate_failure(site_db, candidate_id, candidate)
-                        candidate_id = None  # Prevent double-handling in post-loop block
-                    continue  # Retry outer loop with stronger avoidance
+                if not is_update_article:
+                    topic_covered, topic_match = is_topic_covered(research_context, cat_avoidance)
+                    if topic_covered:
+                        print(f"  ⚠ Research topic already covered: {topic_match[:70] if topic_match else 'unknown'}")
+                        if topic_match:
+                            cat_avoidance["titles"].append(topic_match)
+                            cat_avoidance["keywords"].append(extract_keywords(topic_match))
+                        if candidate_id:
+                            _handle_candidate_failure(site_db, candidate_id, candidate)
+                            candidate_id = None  # Prevent double-handling in post-loop block
+                        continue  # Retry outer loop with stronger avoidance
 
                 # Step 2: Build prompt with research context injected
                 article_prompt = article_prompt_template.replace("{{category}}", category)
@@ -1036,38 +1417,43 @@ def main():
                 print(f"  Source: {source_url[:60]}..." if len(str(source_url)) > 60 else f"  Source: {source_url}")
                 print(f"  Tokens: {input_tokens} in / {output_tokens} out")
 
-                # Post-generation duplicate check — title/case_name Jaccard similarity
-                if is_duplicate(title, case_name, existing_articles):
-                    print(f"  ⚠ DUPLICATE detected (title Jaccard match)")
-                    # Strengthen avoidance and retry
-                    cat_avoidance["titles"].append(title)
-                    cat_avoidance["keywords"].append(extract_keywords(title))
-                    if case_name:
-                        cat_avoidance["titles"].append(case_name)
-                        cat_avoidance["keywords"].append(extract_keywords(case_name))
-                    if candidate_id:
-                        _handle_candidate_failure(site_db, candidate_id, candidate)
-                        candidate_id = None  # Prevent double-handling in post-loop block
-                    continue  # Retry outer loop
-
-                # Post-generation content body check — catches cases where the title is
-                # worded differently but the article body references the same case.
-                # use_proper_nouns=False avoids false positives from generic legal
-                # terms in long article text (only checks "X v. Y" and labeled fields)
-                content_body = article_data.get("content", "")
-                if content_body:
-                    body_is_dup, body_match = check_research_context(
-                        content_body, existing_articles, use_proper_nouns=False
-                    )
-                    if body_is_dup:
-                        print(f"  ⚠ DUPLICATE detected in content body (matches: {body_match[:70] if body_match else 'unknown'})")
-                        if body_match:
-                            cat_avoidance["titles"].append(body_match)
-                            cat_avoidance["keywords"].append(extract_keywords(body_match))
+                # Post-generation duplicate check — skip for update articles since
+                # they intentionally cover an existing case with new developments
+                if not is_update_article:
+                    # Title/case_name Jaccard similarity
+                    if is_duplicate(title, case_name, existing_articles):
+                        print(f"  ⚠ DUPLICATE detected (title Jaccard match)")
+                        # Strengthen avoidance and retry
+                        cat_avoidance["titles"].append(title)
+                        cat_avoidance["keywords"].append(extract_keywords(title))
+                        if case_name:
+                            cat_avoidance["titles"].append(case_name)
+                            cat_avoidance["keywords"].append(extract_keywords(case_name))
                         if candidate_id:
                             _handle_candidate_failure(site_db, candidate_id, candidate)
                             candidate_id = None  # Prevent double-handling in post-loop block
                         continue  # Retry outer loop
+
+                    # Content body check — catches cases where the title is
+                    # worded differently but the article body references the same case.
+                    # use_proper_nouns=False avoids false positives from generic legal
+                    # terms in long article text (only checks "X v. Y" and labeled fields)
+                    content_body = article_data.get("content", "")
+                    if content_body:
+                        body_is_dup, body_match = check_research_context(
+                            content_body, existing_articles, use_proper_nouns=False
+                        )
+                        if body_is_dup:
+                            print(f"  ⚠ DUPLICATE detected in content body (matches: {body_match[:70] if body_match else 'unknown'})")
+                            if body_match:
+                                cat_avoidance["titles"].append(body_match)
+                                cat_avoidance["keywords"].append(extract_keywords(body_match))
+                            if candidate_id:
+                                _handle_candidate_failure(site_db, candidate_id, candidate)
+                                candidate_id = None  # Prevent double-handling in post-loop block
+                            continue  # Retry outer loop
+                else:
+                    print(f"  ℹ️ Skipping dedup checks (update article)")
 
                 article_written = True
                 break  # Post-gen checks passed — article is clean
