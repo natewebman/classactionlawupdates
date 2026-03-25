@@ -30,7 +30,7 @@ from supabase import create_client
 
 # Add scripts/lib to path for shared utilities
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
-from dedup import is_duplicate
+# is_duplicate import removed — regeneration dedup check was too aggressive
 
 
 # =============================================================================
@@ -363,7 +363,7 @@ def regenerate(claude_client: anthropic.Anthropic, article: dict, existing_title
 # PROCESS ONE ARTICLE
 # =============================================================================
 
-def process_article(article: dict, site_db, admin_db, claude_client: anthropic.Anthropic, existing_titles: list[str] = None, existing_articles: list[dict] = None) -> bool:
+def process_article(article: dict, site_db, admin_db, claude_client: anthropic.Anthropic, existing_titles: list[str] = None) -> bool:
     """
     Run a single article through all 3 pipeline steps.
     Returns True if article reaches 'published', False if it fails.
@@ -419,20 +419,11 @@ def process_article(article: dict, site_db, admin_db, claude_client: anthropic.A
             if "title" in updates and updates["title"] != old_title:
                 print(f"   ↳ New title: {updates['title'][:70]}")
 
-            # Post-regeneration duplicate check (filter out self-match).
-            # Use old_title + article_id to exclude the current article,
-            # since article dict was already mutated with new values above.
-            new_title = updates.get("title", old_title)
-            new_case = updates.get("case_name", article.get("case_name"))
-            existing_for_dedup = [
-                e for e in existing_articles
-                if e.get("id") != article_id and e.get("title") != old_title
-            ]
-            if existing_for_dedup and is_duplicate(new_title, new_case, existing_for_dedup):
-                print(f"   ⚠ Regenerated article is a DUPLICATE — marking failed")
-                update_stage(site_db, article_id, "failed")
-                sync_admin_stage(admin_db, article_id, "failed")
-                return False
+            # Skip post-regeneration duplicate check. The article already
+            # passed dedup during generation — regeneration just corrects
+            # facts for the same case, so title similarity is expected.
+            # The old check (is_duplicate at Jaccard 0.35) was too aggressive
+            # and blocked legitimate fact-check corrections.
 
             site_db.table("articles").update(updates).eq("id", article_id).execute()
             print(f"   ↳ Site DB: content_stage = 'draft'")
@@ -508,15 +499,13 @@ def main():
     print(f"\nFound {len(articles)} draft article(s) to process.")
 
     # Deduplication: load existing articles for prompt-level and post-regen checks
-    existing_articles = []
     existing_titles = []
     try:
         existing = site_db.table("articles") \
-            .select("id, title, case_name") \
+            .select("title, case_name") \
             .neq("content_stage", "failed") \
             .execute()
-        existing_articles = existing.data or []
-        for row in existing_articles:
+        for row in (existing.data or []):
             if row.get("title"):
                 existing_titles.append(row["title"])
             if row.get("case_name"):
@@ -533,7 +522,7 @@ def main():
 
     for article in articles:
         try:
-            ok = process_article(article, site_db, admin_db, claude, existing_titles, existing_articles)
+            ok = process_article(article, site_db, admin_db, claude, existing_titles)
             if ok:
                 succeeded += 1
             else:
