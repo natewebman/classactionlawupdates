@@ -1306,6 +1306,7 @@ def main():
             max_article_attempts = 3
             article_written = False
             candidate_id = None  # Track if we're using a backlog candidate
+            tried_candidate_ids = set()  # Track candidates tried this article slot
 
             for attempt in range(max_article_attempts):
                 if attempt > 0:
@@ -1326,13 +1327,17 @@ def main():
                 update_info = None
 
                 if not TOPIC_URL and not TOPIC_IDEA and site_db_site_id:
-                    result = site_db.table("case_candidates") \
+                    query = site_db.table("case_candidates") \
                         .select("*") \
                         .eq("site_id", site_db_site_id) \
                         .eq("processed", False) \
                         .eq("status", "discovered") \
                         .eq("category", category) \
-                        .eq("content_type", article_content_type) \
+                        .eq("content_type", article_content_type)
+                    # Skip candidates already tried this article slot
+                    for skip_id in tried_candidate_ids:
+                        query = query.neq("id", skip_id)
+                    result = query \
                         .order("discovered_at", desc=False) \
                         .limit(1) \
                         .execute()
@@ -1340,6 +1345,7 @@ def main():
                     if result.data:
                         candidate = result.data[0]
                         candidate_id = candidate["id"]
+                        tried_candidate_ids.add(candidate_id)
                         # Safely claim candidate — verify it was actually claimed
                         claim_result = site_db.table("case_candidates") \
                             .update({"status": "processing"}) \
@@ -1422,7 +1428,8 @@ def main():
                         # Mark candidate as failed if we were using backlog
                         if candidate_id:
                             _handle_candidate_failure(site_db, candidate_id, candidate)
-                        break  # All research retries exhausted — give up on this article slot
+                            candidate_id = None
+                        continue  # Try next attempt with a different candidate
 
                 # Step 2b: Pre-generation topic coverage check (skip for update articles)
                 # Catches cases where check_research_context() misses overlap because
@@ -1512,14 +1519,10 @@ def main():
                 break  # Post-gen checks passed — article is clean
 
             if not article_written:
-                # Handle candidate failure if we were using a backlog candidate
-                # (research_is_dup case already handled above via break)
-                if candidate_id and not research_is_dup:
+                # Handle candidate failure if last attempt had a candidate
+                if candidate_id:
                     _handle_candidate_failure(site_db, candidate_id, candidate)
-                if not research_is_dup:
-                    print(f"  ✗ All {max_article_attempts} generation attempts produced duplicates — skipping")
-                else:
-                    print(f"  ✗ Could not find unique research — skipping")
+                print(f"  ✗ All {max_article_attempts} attempts exhausted — skipping")
                 articles_failed += 1
                 continue
 
