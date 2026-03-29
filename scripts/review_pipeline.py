@@ -239,11 +239,11 @@ def human_rewrite(claude_client: anthropic.Anthropic, article: dict) -> str:
 
 REGEN_MODEL = "claude-haiku-4-5-20251001"  # Cheap model for regeneration drafts
 
-def regenerate(claude_client: anthropic.Anthropic, article: dict, existing_titles: list[str] = None) -> dict:
+def regenerate(claude_client: anthropic.Anthropic, article: dict, existing_titles: list[str] = None) -> dict | None:
     """
     Regenerate content for an article that failed fact-checking.
     Uses Perplexity to research the SPECIFIC lawsuit by name, then Haiku to rewrite.
-    Returns a dict with updated fields: {content, title, slug, meta_description, ...}
+    Returns a dict with updated fields, or None if the case cannot be verified.
     """
     category = article.get('category', 'consumer protection')
     title = article.get('title', '')
@@ -277,18 +277,18 @@ def regenerate(claude_client: anthropic.Anthropic, article: dict, existing_title
                 "- Claims administrator and settlement website URL\n"
                 "- Source URLs\n\n"
                 "If this specific case cannot be found or appears to be fabricated, "
-                "say 'CASE NOT FOUND' and then provide details about a REAL, ACTIVE "
-                f"class action settlement in the '{category}' category instead."
-                + (
-                    "\n\nDo NOT suggest any of these cases (already on our site):\n"
-                    + "\n".join(f"- {t}" for t in (existing_titles or [])[:15])
-                    if existing_titles else ""
-                )
+                "respond with ONLY the text 'CASE NOT FOUND'. "
+                "Do NOT suggest alternative cases."
                 + "\n\nLimit response to 300-500 words. Use bullet points."
             ),
         },
     ]
     research_context = ask_perplexity(research_messages, max_tokens=1024)
+
+    # If Perplexity couldn't verify the case, bail out early
+    if research_context and "CASE NOT FOUND" in research_context.upper()[:200]:
+        print(f"   ↳ Perplexity could not verify case — skipping regeneration")
+        return None
 
     # Step 2: Generate corrected article with Haiku — return JSON so we can update metadata too
     response = claude_client.messages.create(
@@ -396,6 +396,13 @@ def process_article(article: dict, site_db, admin_db, claude_client: anthropic.A
 
             print(f"   ↻ Regenerating article via Perplexity research (attempt {attempt}/{MAX_REGEN_ATTEMPTS})...")
             regen_result = regenerate(claude_client, article, existing_titles)
+
+            if regen_result is None:
+                # Case couldn't be verified by Perplexity — no point retrying
+                print(f"   ✗ Case not verifiable. Marking failed.")
+                update_stage(site_db, article_id, "failed")
+                sync_admin_stage(admin_db, article_id, "failed")
+                return False
 
             # Update content
             new_content = regen_result.get("content", article["content"])
